@@ -1,0 +1,17 @@
+.dash-embeded {
+   .nav.nav-tabs {
+      justify-content: space-between;
+      text-align: center;
+      .nav-link {
+         border-radius: 0;
+         background-color: $gray-300;
+         color: $gray-800;
+         padding: 25px 15px;
+      }
+      .nav-link.active {
+         border: 0;
+         color: white;
+         background-color: $gray-700;
+      }
+   }
+}

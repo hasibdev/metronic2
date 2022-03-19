@@ -49133,6 +49133,18 @@ body {
   border: 0;
 }
 
-body {
-  display: none !important;
+.dash-embeded .nav.nav-tabs {
+  justify-content: space-between;
+  text-align: center;
+}
+.dash-embeded .nav.nav-tabs .nav-link {
+  border-radius: 0;
+  background-color: #E4E6EF;
+  color: #3F4254;
+  padding: 25px 15px;
+}
+.dash-embeded .nav.nav-tabs .nav-link.active {
+  border: 0;
+  color: white;
+  background-color: #5E6278;
 }
