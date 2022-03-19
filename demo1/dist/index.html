@@ -8281,7 +8281,19 @@ License: For each use you must have a valid license purchased only from above li
 						<!--begin::Col-->
 						<div class="col-xxl-4">
 							<div class="card card-body h-100">
-								Calender here
+								<!--begin::Localization dropdown-->
+								<div class="mb-5">
+									<label class="fs-4 fw-bolder mb-3">Select a Timezone:</label>
+									<select id="kt_docs_fullcalendar_timezone_selector" class="form-select mw-200px"
+										data-control="select2" data-placeholder="Select an option">
+										...
+									</select>
+								</div>
+								<!--end::Localization dropdown-->
+
+								<!--begin::Fullcalendar-->
+								<div id="kt_docs_fullcalendar_timezone"></div>
+								<!--end::Fullcalendar-->
 							</div>
 						</div>
 						<!--end::Col-->
@@ -13135,6 +13147,85 @@ License: For each use you must have a valid license purchased only from above li
 	<script src="assets/js/custom/utilities/modals/create-app.js"></script>
 	<script src="assets/js/custom/utilities/modals/users-search.js"></script>
 	<!--end::Page Custom Javascript-->
+
+
+	<!-- Calender -->
+	<script>
+		var initialTimeZone = "local"
+		var timeZoneSelectorEl = document.getElementById("kt_docs_fullcalendar_timezone_selector")
+		var calendarEl = document.getElementById("kt_docs_fullcalendar_timezone")
+		var todayDate = moment().startOf("day")
+		var YM = todayDate.format("YYYY-MM")
+		var YESTERDAY = todayDate.clone().subtract(1, "day").format("YYYY-MM-DD")
+		var TODAY = todayDate.format("YYYY-MM-DD")
+		var TOMORROW = todayDate.clone().add(1, "day").format("YYYY-MM-DD")
+		var eventsArray = []
+
+		// Initialize the external events -- for more info please visit the official site: https://fullcalendar.io/demos
+		var calendar = new FullCalendar.Calendar(calendarEl, {
+			timeZone: initialTimeZone,
+			headerToolbar: {
+				left: "prev,next today",
+				center: "title",
+				right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek"
+			},
+			initialDate: TODAY,
+			navLinks: true, // can click day/week names to navigate views
+			editable: true,
+			selectable: true,
+			dayMaxEvents: true, // allow "more" link when too many events
+
+			eventTimeFormat: { hour: "numeric", minute: "2-digit", timeZoneName: "short" },
+			events: eventsArray,
+		})
+
+		calendar.render()
+
+		// when the timezone selector changes, dynamically change the calendar option
+		// --- more info on Select2 on Change event: https://select2.org/programmatic-control/events
+		$(timeZoneSelectorEl).on("change", function () {
+			calendar.setOption("timeZone", "UTC")
+
+			// Remove all events
+			const removeEvents = calendar.getEvents()
+			removeEvents.forEach(event => {
+				event.remove()
+			})
+
+			// Add events with new timezone offset
+			const newEvents = eventsArray
+			newEvents.forEach(event => {
+				var start
+				var end
+
+				if (this.value < 0) {
+					start = moment(event.start).subtract(this.value.replace(/\D/g, ""), "seconds").format(getFormat(event.start))
+					end = event.end ? moment(event.end).subtract(this.value.replace(/\D/g, ""), "seconds").format(getFormat(event.end)) : start
+				} else {
+					start = moment(event.start).add(this.value, "seconds").format(getFormat(event.start))
+					end = event.end ? moment(event.end).add(this.value, "seconds").format(getFormat(event.end)) : start
+				}
+
+				calendar.addEvent({
+					title: event.title,
+					start: start,
+					end: end
+				})
+			})
+
+			calendar.render()
+		})
+
+		// Dynamic date format generator
+		const getFormat = (d) => {
+			if (d.includes("T")) {
+				return "YYYY-MM-DDTHH:mm:ss"
+			} else {
+				return "YYYY-MM-DD"
+			}
+		}
+	</script>
+
 	<!--end::Javascript-->
 </body>
 <!--end::Body-->
