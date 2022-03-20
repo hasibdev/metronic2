@@ -67,10 +67,10 @@ License: For each use you must have a valid license purchased only from above li
 					</a>
 					<!--end::Logo-->
 					<!--begin::Aside toggler-->
-					<div id="kt_aside_toggle" class="btn btn-icon w-auto px-0 btn-active-color-primary aside-toggle"
+					<!-- <div id="kt_aside_toggle" class="btn btn-icon w-auto px-0 btn-active-color-primary aside-toggle"
 						data-kt-toggle="true" data-kt-toggle-state="active" data-kt-toggle-target="body"
 						data-kt-toggle-name="aside-minimize">
-						<!--begin::Svg Icon | path: icons/duotune/arrows/arr079.svg-->
+						
 						<span class="svg-icon svg-icon-1 rotate-180">
 							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
 								<path opacity="0.5"
@@ -81,8 +81,8 @@ License: For each use you must have a valid license purchased only from above li
 									fill="black" />
 							</svg>
 						</span>
-						<!--end::Svg Icon-->
-					</div>
+						
+					</div> -->
 					<!--end::Aside toggler-->
 				</div>
 				<!--end::Brand-->
@@ -2369,7 +2369,7 @@ License: For each use you must have a valid license purchased only from above li
 			<!--begin::Wrapper-->
 			<div class="wrapper d-flex flex-column flex-row-fluid" id="kt_wrapper">
 				<!--begin::Header-->
-				<div id="kt_header" style="" class="header align-items-stretch">
+				<div id="kt_header" style="" class="header bg-dark align-items-stretch">
 					<!--begin::Container-->
 					<div class="container-fluid d-flex align-items-stretch justify-content-between">
 						<!--begin::Aside mobile toggle-->
@@ -8308,7 +8308,8 @@ License: For each use you must have a valid license purchased only from above li
 									lessons</h2>
 
 								<div class="mt-12">
-									<button class="btn btn-danger">Get Reward</button>
+									<button class="btn btn-danger" type="button" data-bs-toggle="modal"
+										data-bs-target="#kt_modal_3">Get Reward</button>
 									<button class="btn btn-secondary">How To</button>
 								</div>
 							</div>
@@ -13130,6 +13131,36 @@ License: For each use you must have a valid license purchased only from above li
 	</div>
 	<!--end::Modal - Users Search-->
 	<!--end::Modals-->
+
+	<!-- Dragable Modal -->
+	<div class="modal fade" tabindex="-1" id="kt_modal_3">
+		<div class="modal-dialog">
+			<div class="modal-content position-absolute">
+				<div class="modal-header">
+					<h5 class="modal-title">Modal title</h5>
+
+					<!--begin::Close-->
+					<div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal"
+						aria-label="Close">
+						<span class="svg-icon svg-icon-2x"></span>
+					</div>
+					<!--end::Close-->
+				</div>
+
+				<div class="modal-body">
+					<p>Modal body text goes here.</p>
+				</div>
+
+				<div class="modal-footer">
+					<button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+					<button type="button" class="btn btn-primary">Save changes</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- // Dragable Modal // -->
+
+
 	<!--begin::Javascript-->
 	<script>var hostUrl = "assets/";</script>
 	<!--begin::Global Javascript Bundle(used by all pages)-->
@@ -13223,6 +13254,54 @@ License: For each use you must have a valid license purchased only from above li
 				return "YYYY-MM-DDTHH:mm:ss"
 			} else {
 				return "YYYY-MM-DD"
+			}
+		}
+	</script>
+
+	<!-- Dragable Modal -->
+	<script>
+		// Make the DIV element draggable:
+		var element = document.querySelector('#kt_modal_3')
+		dragElement(element)
+
+		function dragElement(elmnt) {
+			var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0
+			if (elmnt.querySelector('.modal-content')) {
+				// if present, the header is where you move the DIV from:
+				elmnt.querySelector('.modal-content').onmousedown = dragMouseDown
+			} else {
+				// otherwise, move the DIV from anywhere inside the DIV:
+				elmnt.onmousedown = dragMouseDown
+			}
+
+			function dragMouseDown(e) {
+				e = e || window.event
+				e.preventDefault()
+				// get the mouse cursor position at startup:
+				pos3 = e.clientX
+				pos4 = e.clientY
+				document.onmouseup = closeDragElement
+				// call a function whenever the cursor moves:
+				document.onmousemove = elementDrag
+			}
+
+			function elementDrag(e) {
+				e = e || window.event
+				e.preventDefault()
+				// calculate the new cursor position:
+				pos1 = pos3 - e.clientX
+				pos2 = pos4 - e.clientY
+				pos3 = e.clientX
+				pos4 = e.clientY
+				// set the element's new position:
+				elmnt.style.top = (elmnt.offsetTop - pos2) + "px"
+				elmnt.style.left = (elmnt.offsetLeft - pos1) + "px"
+			}
+
+			function closeDragElement() {
+				// stop moving when mouse button is released:
+				document.onmouseup = null
+				document.onmousemove = null
 			}
 		}
 	</script>
