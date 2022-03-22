@@ -49133,8 +49133,15 @@ body {
   border: 0;
 }
 
+.text-logo {
+  font-size: 17px;
+  font-weight: 900;
+  display: block;
+  color: white;
+}
+
 .content {
-  padding: 80px 0;
+  padding: 80px 0 !important;
 }
 
 .dash-embeded .nav.nav-tabs {
