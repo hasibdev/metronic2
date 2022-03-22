@@ -1,6 +1,815 @@
 "use strict";
 
 // Class definition
+var KTCardsWidget1 = function () {
+    // Private methods
+    var initChart = function() {
+        var element = document.getElementById("kt_card_widget_1_chart");
+        
+        if (!element) {
+            return;
+        }
+
+        var color = element.getAttribute('data-kt-chart-color');
+        
+        var height = parseInt(KTUtil.css(element, 'height'));
+        var labelColor = KTUtil.getCssVariableValue('--bs-gray-500');         
+        var baseColor = KTUtil.isHexColor(color) ? color : KTUtil.getCssVariableValue('--bs-' + color);
+        var secondaryColor = KTUtil.getCssVariableValue('--bs-gray-300');        
+
+        var options = {
+            series: [{
+                name: 'Net Profit',
+                data: [30, 75, 55, 45, 30, 60, 75, 50],
+                margin: {
+					left: 5,
+					right: 5
+				}   
+            }],
+            chart: {
+                fontFamily: 'inherit',
+                type: 'bar',
+                height: height,
+                toolbar: {
+                    show: false
+                },
+                sparkline: {
+                    enabled: true
+                }
+            },
+            plotOptions: {
+                bar: {
+                    horizontal: false,
+                    columnWidth: ['35%'],
+                    borderRadius: 6
+                }
+            },
+            legend: {
+                show: false
+            },
+            dataLabels: {
+                enabled: false
+            },
+            stroke: {
+                show: true,
+                width: 4,
+                colors: ['transparent']
+            },
+            xaxis: {                
+                axisBorder: {
+                    show: false,
+                },
+                axisTicks: {
+                    show: false
+                },
+                labels: {
+                    show: false,
+                    style: {
+                        colors: labelColor,
+                        fontSize: '12px'
+                    }
+                },               
+                crosshairs: {
+                    show: false
+                }
+            },
+            yaxis: {
+                labels: {
+                    show: false,
+                    style: {
+                        colors: labelColor,
+                        fontSize: '12px'
+                    }
+                }
+            },
+            fill: {
+                type: 'solid'
+            },
+            states: {
+                normal: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                hover: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                active: {
+                    allowMultipleDataPointsSelection: false,
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                }
+            },
+            tooltip: {
+                style: {
+                    fontSize: '12px'
+                },
+                x: {
+                    formatter: function (val) {
+                        return "Impression: " + val
+                    }
+                },
+                y: {
+                    formatter: function (val) {
+                        return "$" + val + " revenue"
+                    }
+                }
+            },
+            colors: [baseColor, secondaryColor],
+            grid: {
+                borderColor: false,
+                strokeDashArray: 4,
+                yaxis: {
+                    lines: {
+                        show: true
+                    }
+                },
+                padding: {
+                    top: 10,
+					left: 25,
+					right: 25     
+				}               
+            }
+        };
+
+        // Set timeout to properly get the parent elements width
+        var chart = new ApexCharts(element, options);
+        
+        // Set timeout to properly get the parent elements width
+        setTimeout(function() {
+            chart.render();   
+        }, 300);  
+    }
+
+    // Public methods
+    return {
+        init: function () {
+            initChart();
+        }   
+    }
+}();
+
+// Webpack support
+if (typeof module !== 'undefined') {
+    module.exports = KTCardsWidget1;
+}
+
+// On document ready
+KTUtil.onDOMContentLoaded(function() {
+    KTCardsWidget1.init();
+});
+   
+        
+        
+        
+           
+"use strict";
+
+// Class definition
+var KTCardsWidget10 = function () {
+    // Private methods
+    var initChart = function() {
+        var el = document.getElementById('kt_card_widget_10_chart'); 
+
+        if (!el) {
+            return;
+        }
+
+        var options = {
+            size: el.getAttribute('data-kt-size') ? parseInt(el.getAttribute('data-kt-size')) : 70,
+            lineWidth: el.getAttribute('data-kt-line') ? parseInt(el.getAttribute('data-kt-line')) : 11,
+            rotate: el.getAttribute('data-kt-rotate') ? parseInt(el.getAttribute('data-kt-rotate')) : 145,            
+            //percent:  el.getAttribute('data-kt-percent') ,
+        }
+
+        var canvas = document.createElement('canvas');
+        var span = document.createElement('span'); 
+            
+        if (typeof(G_vmlCanvasManager) !== 'undefined') {
+            G_vmlCanvasManager.initElement(canvas);
+        }
+
+        var ctx = canvas.getContext('2d');
+        canvas.width = canvas.height = options.size;
+
+        el.appendChild(span);
+        el.appendChild(canvas);
+
+        ctx.translate(options.size / 2, options.size / 2); // change center
+        ctx.rotate((-1 / 2 + options.rotate / 180) * Math.PI); // rotate -90 deg
+
+        //imd = ctx.getImageData(0, 0, 240, 240);
+        var radius = (options.size - options.lineWidth) / 2;
+
+        var drawCircle = function(color, lineWidth, percent) {
+            percent = Math.min(Math.max(0, percent || 1), 1);
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2 * percent, false);
+            ctx.strokeStyle = color;
+            ctx.lineCap = 'round'; // butt, round or square
+            ctx.lineWidth = lineWidth
+            ctx.stroke();
+        };
+
+        // Init 
+        drawCircle('#E4E6EF', options.lineWidth, 100 / 100); 
+        drawCircle(KTUtil.getCssVariableValue('--bs-primary'), options.lineWidth, 100 / 150);
+        drawCircle(KTUtil.getCssVariableValue('--bs-success'), options.lineWidth, 100 / 250);   
+    }
+
+    // Public methods
+    return {
+        init: function () {
+            initChart();
+        }   
+    }
+}();
+
+// Webpack support
+if (typeof module !== 'undefined') {
+    module.exports = KTCardsWidget10;
+}
+
+// On document ready
+KTUtil.onDOMContentLoaded(function() {
+    KTCardsWidget10.init();
+});
+   
+        
+        
+        
+           
+"use strict";
+
+// Class definition
+var KTCardsWidget4 = function () {
+    // Private methods
+    var initChart = function() {
+        var el = document.getElementById('kt_card_widget_4_chart'); 
+
+        if (!el) {
+            return;
+        }
+
+        var options = {
+            size: el.getAttribute('data-kt-size') ? parseInt(el.getAttribute('data-kt-size')) : 70,
+            lineWidth: el.getAttribute('data-kt-line') ? parseInt(el.getAttribute('data-kt-line')) : 11,
+            rotate: el.getAttribute('data-kt-rotate') ? parseInt(el.getAttribute('data-kt-rotate')) : 145,            
+            //percent:  el.getAttribute('data-kt-percent') ,
+        }
+
+        var canvas = document.createElement('canvas');
+        var span = document.createElement('span'); 
+            
+        if (typeof(G_vmlCanvasManager) !== 'undefined') {
+            G_vmlCanvasManager.initElement(canvas);
+        }
+
+        var ctx = canvas.getContext('2d');
+        canvas.width = canvas.height = options.size;
+
+        el.appendChild(span);
+        el.appendChild(canvas);
+
+        ctx.translate(options.size / 2, options.size / 2); // change center
+        ctx.rotate((-1 / 2 + options.rotate / 180) * Math.PI); // rotate -90 deg
+
+        //imd = ctx.getImageData(0, 0, 240, 240);
+        var radius = (options.size - options.lineWidth) / 2;
+
+        var drawCircle = function(color, lineWidth, percent) {
+            percent = Math.min(Math.max(0, percent || 1), 1);
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2 * percent, false);
+            ctx.strokeStyle = color;
+            ctx.lineCap = 'round'; // butt, round or square
+            ctx.lineWidth = lineWidth
+            ctx.stroke();
+        };
+
+        // Init 
+        drawCircle('#E4E6EF', options.lineWidth, 100 / 100); 
+        drawCircle(KTUtil.getCssVariableValue('--bs-danger'), options.lineWidth, 100 / 150);
+        drawCircle(KTUtil.getCssVariableValue('--bs-primary'), options.lineWidth, 100 / 250);   
+    }
+
+    // Public methods
+    return {
+        init: function () {
+            initChart();
+        }   
+    }
+}();
+
+// Webpack support
+if (typeof module !== 'undefined') {
+    module.exports = KTCardsWidget4;
+}
+
+// On document ready
+KTUtil.onDOMContentLoaded(function() {
+    KTCardsWidget4.init();
+});
+   
+        
+        
+        
+           
+"use strict";
+
+// Class definition
+var KTCardsWidget6 = function () {
+    // Private methods
+    var initChart = function() {
+        var element = document.getElementById("kt_card_widget_6_chart");
+
+        if (!element) {
+            return;
+        }
+
+        var height = parseInt(KTUtil.css(element, 'height'));
+        var labelColor = KTUtil.getCssVariableValue('--bs-gray-500');
+        var borderColor = KTUtil.getCssVariableValue('--bs-border-dashed-color');
+        var baseColor = KTUtil.getCssVariableValue('--bs-primary');
+        var secondaryColor = KTUtil.getCssVariableValue('--bs-gray-300');
+
+        var options = {
+            series: [{
+                name: 'Sales',
+                data: [30, 60, 53, 45, 60, 75, 53]
+            }, ],
+            chart: {
+                fontFamily: 'inherit',
+                type: 'bar',
+                height: height,
+                toolbar: {
+                    show: false
+                },
+                sparkline: {
+                    enabled: true
+                }
+            },
+            plotOptions: {
+                bar: {
+                    horizontal: false,
+                    columnWidth: ['55%'],
+                    borderRadius: 6
+                }
+            },
+            legend: {
+                show: false,
+            },
+            dataLabels: {
+                enabled: false
+            },
+            stroke: {
+                show: true,
+                width: 9,
+                colors: ['transparent']
+            },
+            xaxis: {                
+                axisBorder: {
+                    show: false,
+                },
+                axisTicks: {
+                    show: false,
+                    tickPlacement: 'between'
+                },
+                labels: {
+                    show: false,
+                    style: {
+                        colors: labelColor,
+                        fontSize: '12px'
+                    }
+                },
+                crosshairs: {
+                    show: false
+                }
+            },
+            yaxis: {
+                labels: {
+                    show: false,
+                    style: {
+                        colors: labelColor,
+                        fontSize: '12px'
+                    }
+                }
+            },
+            fill: {
+                type: 'solid'
+            },
+            states: {
+                normal: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                hover: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                active: {
+                    allowMultipleDataPointsSelection: false,
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                }
+            },
+            tooltip: {
+                style: {
+                    fontSize: '12px'
+                },
+                x: {
+                    formatter: function (val) {
+                        return 'Impressions: ' + val;
+                    }
+                },
+                y: {
+                    formatter: function (val) {
+                        return "$" + val + "K"
+                    }
+                }
+            },
+            colors: [baseColor, secondaryColor],
+            grid: {
+                padding: {
+                    left: 10,
+                    right: 10
+                },
+                borderColor: borderColor,
+                strokeDashArray: 4,
+                yaxis: {
+                    lines: {
+                        show: true
+                    }
+                }             
+            }
+        }; 
+
+        var chart = new ApexCharts(element, options);
+        
+        // Set timeout to properly get the parent elements width
+        setTimeout(function() {
+            chart.render();   
+        }, 300);     
+    }
+
+    // Public methods
+    return {
+        init: function () {
+            initChart();
+        }   
+    }
+}();
+
+// Webpack support
+if (typeof module !== 'undefined') {
+    module.exports = KTCardsWidget6;
+}
+
+// On document ready
+KTUtil.onDOMContentLoaded(function() {
+    KTCardsWidget6.init();
+});
+   
+        
+        
+        
+           
+"use strict";
+
+// Class definition
+var KTCardWidget8 = function () {
+    // Private methods
+    var initChart = function() {
+        var element = document.getElementById("kt_card_widget_8_chart");
+
+        if (!element) {
+            return;
+        }
+
+        var height = parseInt(KTUtil.css(element, 'height'));       
+        var borderColor = KTUtil.getCssVariableValue('--bs-border-dashed-color');
+        var baseColor = KTUtil.getCssVariableValue('--bs-gray-800');
+        var lightColor = KTUtil.getCssVariableValue('--bs-light-info');
+
+        var options = {
+            series: [{
+                name: 'Net Profit',
+                data: [35, 25, 45, 15, 60, 50, 57, 35, 70, 40, 45, 25, 45, 30, 70]
+            }],
+            chart: {
+                fontFamily: 'inherit',
+                type: 'area',
+                height: height,
+                toolbar: {
+                    show: false
+                }
+            },             
+            legend: {
+                show: false
+            },
+            dataLabels: {
+                enabled: false
+            },
+            fill: {
+                type: 'solid',
+                opacity: 0
+            },
+            stroke: {
+                curve: 'smooth',
+                show: true,
+                width: 2,
+                colors: [baseColor]
+            },
+            xaxis: {                 
+                axisBorder: {
+                    show: false,
+                },
+                axisTicks: {
+                    show: false
+                },
+                labels: {
+                    show: false
+                },
+                crosshairs: {
+                    position: 'front',
+                    stroke: {
+                        color: baseColor,
+                        width: 1,
+                        dashArray: 3
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    formatter: undefined,
+                    offsetY: 0,
+                    style: {
+                        fontSize: '12px'
+                    }
+                }
+            },
+            yaxis: {
+                labels: {
+                    show: false
+                }
+            },
+            states: {
+                normal: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                hover: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                active: {
+                    allowMultipleDataPointsSelection: false,
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                }
+            },
+            tooltip: {
+                style: {
+                    fontSize: '12px'
+                },
+                x: {
+                    formatter: function (val) {
+                        return "Impression " + val;
+                    }
+                },
+                y: {
+                    formatter: function (val) {
+                        return "$" + val + " thousands"
+                    }
+                }
+            },
+            colors: [lightColor],
+            grid: {                 
+                strokeDashArray: 4,
+                padding: {
+                    top: 0,
+                    right: -20,
+                    bottom: -20,
+                    left: -20
+                },
+                yaxis: {
+                    lines: {
+                        show: true
+                    }
+                }
+            },
+            markers: {
+                strokeColor: baseColor,
+                strokeWidth: 2
+            }
+        }; 
+
+        var chart = new ApexCharts(element, options);
+        
+        // Set timeout to properly get the parent elements width
+        setTimeout(function() {
+            chart.render();   
+        }, 300);  
+    }
+
+    // Public methods
+    return {
+        init: function () {
+            initChart();
+        }   
+    }
+}();
+
+// Webpack support
+if (typeof module !== 'undefined') {
+    module.exports = KTCardWidget8;
+}
+
+// On document ready
+KTUtil.onDOMContentLoaded(function() {
+    KTCardWidget8.init();
+});
+
+"use strict";
+
+// Class definition
+var KTCardWidget9 = function () {
+    // Private methods
+    var initChart = function() {
+        var element = document.getElementById("kt_card_widget_9_chart");
+
+        if (!element) {
+            return;
+        }
+
+        var height = parseInt(KTUtil.css(element, 'height'));       
+        var borderColor = KTUtil.getCssVariableValue('--bs-border-dashed-color');
+        var baseColor = KTUtil.getCssVariableValue('--bs-gray-800');
+        var lightColor = KTUtil.getCssVariableValue('--bs-light-info');
+
+        var options = {
+            series: [{
+                name: 'Net Profit',
+                data: [35, 25, 35, 15, 40, 60, 25, 40, 70, 30, 55, 45, 45, 30, 50]
+            }],
+            chart: {
+                fontFamily: 'inherit',
+                type: 'area',
+                height: height,
+                toolbar: {
+                    show: false
+                }
+            },             
+            legend: {
+                show: false
+            },
+            dataLabels: {
+                enabled: false
+            },
+            fill: {
+                type: 'solid',
+                opacity: 0
+            },
+            stroke: {
+                curve: 'smooth',
+                show: true,
+                width: 2,
+                colors: [baseColor]
+            },
+            xaxis: {                 
+                axisBorder: {
+                    show: false,
+                },
+                axisTicks: {
+                    show: false
+                },
+                labels: {
+                    show: false
+                },
+                crosshairs: {
+                    position: 'front',
+                    stroke: {
+                        color: baseColor,
+                        width: 1,
+                        dashArray: 3
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    formatter: undefined,
+                    offsetY: 0,
+                    style: {
+                        fontSize: '12px'
+                    }
+                }
+            },
+            yaxis: {
+                labels: {
+                    show: false
+                }
+            },
+            states: {
+                normal: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                hover: {
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                },
+                active: {
+                    allowMultipleDataPointsSelection: false,
+                    filter: {
+                        type: 'none',
+                        value: 0
+                    }
+                }
+            },
+            tooltip: {
+                style: {
+                    fontSize: '12px'
+                },
+                x: {
+                    formatter: function (val) {
+                        return "Sales " + val;
+                    }
+                },
+                y: {
+                    formatter: function (val) {
+                        return "$" + val + " thousands"
+                    }
+                }
+            },
+            colors: [lightColor],
+            grid: {                 
+                strokeDashArray: 4,
+                padding: {
+                    top: 0,
+                    right: -20,
+                    bottom: -20,
+                    left: -20
+                },
+                yaxis: {
+                    lines: {
+                        show: true
+                    }
+                }
+            },
+            markers: {
+                strokeColor: baseColor,
+                strokeWidth: 2
+            }
+        }; 
+
+        var chart = new ApexCharts(element, options);
+        
+        // Set timeout to properly get the parent elements width
+        setTimeout(function() {
+            chart.render();   
+        }, 300);  
+    }
+
+    // Public methods
+    return {
+        init: function () {
+            initChart();
+        }   
+    }
+}();
+
+// Webpack support
+if (typeof module !== 'undefined') {
+    module.exports = KTCardWidget9;
+}
+
+// On document ready
+KTUtil.onDOMContentLoaded(function() {
+    KTCardWidget9.init();
+});
+"use strict";
+
+// Class definition
 var KTChartsWidget1 = function () {
     // Private methods
     var initChart = function() {
@@ -4170,815 +4979,6 @@ KTUtil.onDOMContentLoaded(function () {
     KTTablesWidget5.init();
 });
 
-"use strict";
-
-// Class definition
-var KTCardsWidget1 = function () {
-    // Private methods
-    var initChart = function() {
-        var element = document.getElementById("kt_card_widget_1_chart");
-        
-        if (!element) {
-            return;
-        }
-
-        var color = element.getAttribute('data-kt-chart-color');
-        
-        var height = parseInt(KTUtil.css(element, 'height'));
-        var labelColor = KTUtil.getCssVariableValue('--bs-gray-500');         
-        var baseColor = KTUtil.isHexColor(color) ? color : KTUtil.getCssVariableValue('--bs-' + color);
-        var secondaryColor = KTUtil.getCssVariableValue('--bs-gray-300');        
-
-        var options = {
-            series: [{
-                name: 'Net Profit',
-                data: [30, 75, 55, 45, 30, 60, 75, 50],
-                margin: {
-					left: 5,
-					right: 5
-				}   
-            }],
-            chart: {
-                fontFamily: 'inherit',
-                type: 'bar',
-                height: height,
-                toolbar: {
-                    show: false
-                },
-                sparkline: {
-                    enabled: true
-                }
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    columnWidth: ['35%'],
-                    borderRadius: 6
-                }
-            },
-            legend: {
-                show: false
-            },
-            dataLabels: {
-                enabled: false
-            },
-            stroke: {
-                show: true,
-                width: 4,
-                colors: ['transparent']
-            },
-            xaxis: {                
-                axisBorder: {
-                    show: false,
-                },
-                axisTicks: {
-                    show: false
-                },
-                labels: {
-                    show: false,
-                    style: {
-                        colors: labelColor,
-                        fontSize: '12px'
-                    }
-                },               
-                crosshairs: {
-                    show: false
-                }
-            },
-            yaxis: {
-                labels: {
-                    show: false,
-                    style: {
-                        colors: labelColor,
-                        fontSize: '12px'
-                    }
-                }
-            },
-            fill: {
-                type: 'solid'
-            },
-            states: {
-                normal: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                hover: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                active: {
-                    allowMultipleDataPointsSelection: false,
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                }
-            },
-            tooltip: {
-                style: {
-                    fontSize: '12px'
-                },
-                x: {
-                    formatter: function (val) {
-                        return "Impression: " + val
-                    }
-                },
-                y: {
-                    formatter: function (val) {
-                        return "$" + val + " revenue"
-                    }
-                }
-            },
-            colors: [baseColor, secondaryColor],
-            grid: {
-                borderColor: false,
-                strokeDashArray: 4,
-                yaxis: {
-                    lines: {
-                        show: true
-                    }
-                },
-                padding: {
-                    top: 10,
-					left: 25,
-					right: 25     
-				}               
-            }
-        };
-
-        // Set timeout to properly get the parent elements width
-        var chart = new ApexCharts(element, options);
-        
-        // Set timeout to properly get the parent elements width
-        setTimeout(function() {
-            chart.render();   
-        }, 300);  
-    }
-
-    // Public methods
-    return {
-        init: function () {
-            initChart();
-        }   
-    }
-}();
-
-// Webpack support
-if (typeof module !== 'undefined') {
-    module.exports = KTCardsWidget1;
-}
-
-// On document ready
-KTUtil.onDOMContentLoaded(function() {
-    KTCardsWidget1.init();
-});
-   
-        
-        
-        
-           
-"use strict";
-
-// Class definition
-var KTCardsWidget10 = function () {
-    // Private methods
-    var initChart = function() {
-        var el = document.getElementById('kt_card_widget_10_chart'); 
-
-        if (!el) {
-            return;
-        }
-
-        var options = {
-            size: el.getAttribute('data-kt-size') ? parseInt(el.getAttribute('data-kt-size')) : 70,
-            lineWidth: el.getAttribute('data-kt-line') ? parseInt(el.getAttribute('data-kt-line')) : 11,
-            rotate: el.getAttribute('data-kt-rotate') ? parseInt(el.getAttribute('data-kt-rotate')) : 145,            
-            //percent:  el.getAttribute('data-kt-percent') ,
-        }
-
-        var canvas = document.createElement('canvas');
-        var span = document.createElement('span'); 
-            
-        if (typeof(G_vmlCanvasManager) !== 'undefined') {
-            G_vmlCanvasManager.initElement(canvas);
-        }
-
-        var ctx = canvas.getContext('2d');
-        canvas.width = canvas.height = options.size;
-
-        el.appendChild(span);
-        el.appendChild(canvas);
-
-        ctx.translate(options.size / 2, options.size / 2); // change center
-        ctx.rotate((-1 / 2 + options.rotate / 180) * Math.PI); // rotate -90 deg
-
-        //imd = ctx.getImageData(0, 0, 240, 240);
-        var radius = (options.size - options.lineWidth) / 2;
-
-        var drawCircle = function(color, lineWidth, percent) {
-            percent = Math.min(Math.max(0, percent || 1), 1);
-            ctx.beginPath();
-            ctx.arc(0, 0, radius, 0, Math.PI * 2 * percent, false);
-            ctx.strokeStyle = color;
-            ctx.lineCap = 'round'; // butt, round or square
-            ctx.lineWidth = lineWidth
-            ctx.stroke();
-        };
-
-        // Init 
-        drawCircle('#E4E6EF', options.lineWidth, 100 / 100); 
-        drawCircle(KTUtil.getCssVariableValue('--bs-primary'), options.lineWidth, 100 / 150);
-        drawCircle(KTUtil.getCssVariableValue('--bs-success'), options.lineWidth, 100 / 250);   
-    }
-
-    // Public methods
-    return {
-        init: function () {
-            initChart();
-        }   
-    }
-}();
-
-// Webpack support
-if (typeof module !== 'undefined') {
-    module.exports = KTCardsWidget10;
-}
-
-// On document ready
-KTUtil.onDOMContentLoaded(function() {
-    KTCardsWidget10.init();
-});
-   
-        
-        
-        
-           
-"use strict";
-
-// Class definition
-var KTCardsWidget4 = function () {
-    // Private methods
-    var initChart = function() {
-        var el = document.getElementById('kt_card_widget_4_chart'); 
-
-        if (!el) {
-            return;
-        }
-
-        var options = {
-            size: el.getAttribute('data-kt-size') ? parseInt(el.getAttribute('data-kt-size')) : 70,
-            lineWidth: el.getAttribute('data-kt-line') ? parseInt(el.getAttribute('data-kt-line')) : 11,
-            rotate: el.getAttribute('data-kt-rotate') ? parseInt(el.getAttribute('data-kt-rotate')) : 145,            
-            //percent:  el.getAttribute('data-kt-percent') ,
-        }
-
-        var canvas = document.createElement('canvas');
-        var span = document.createElement('span'); 
-            
-        if (typeof(G_vmlCanvasManager) !== 'undefined') {
-            G_vmlCanvasManager.initElement(canvas);
-        }
-
-        var ctx = canvas.getContext('2d');
-        canvas.width = canvas.height = options.size;
-
-        el.appendChild(span);
-        el.appendChild(canvas);
-
-        ctx.translate(options.size / 2, options.size / 2); // change center
-        ctx.rotate((-1 / 2 + options.rotate / 180) * Math.PI); // rotate -90 deg
-
-        //imd = ctx.getImageData(0, 0, 240, 240);
-        var radius = (options.size - options.lineWidth) / 2;
-
-        var drawCircle = function(color, lineWidth, percent) {
-            percent = Math.min(Math.max(0, percent || 1), 1);
-            ctx.beginPath();
-            ctx.arc(0, 0, radius, 0, Math.PI * 2 * percent, false);
-            ctx.strokeStyle = color;
-            ctx.lineCap = 'round'; // butt, round or square
-            ctx.lineWidth = lineWidth
-            ctx.stroke();
-        };
-
-        // Init 
-        drawCircle('#E4E6EF', options.lineWidth, 100 / 100); 
-        drawCircle(KTUtil.getCssVariableValue('--bs-danger'), options.lineWidth, 100 / 150);
-        drawCircle(KTUtil.getCssVariableValue('--bs-primary'), options.lineWidth, 100 / 250);   
-    }
-
-    // Public methods
-    return {
-        init: function () {
-            initChart();
-        }   
-    }
-}();
-
-// Webpack support
-if (typeof module !== 'undefined') {
-    module.exports = KTCardsWidget4;
-}
-
-// On document ready
-KTUtil.onDOMContentLoaded(function() {
-    KTCardsWidget4.init();
-});
-   
-        
-        
-        
-           
-"use strict";
-
-// Class definition
-var KTCardsWidget6 = function () {
-    // Private methods
-    var initChart = function() {
-        var element = document.getElementById("kt_card_widget_6_chart");
-
-        if (!element) {
-            return;
-        }
-
-        var height = parseInt(KTUtil.css(element, 'height'));
-        var labelColor = KTUtil.getCssVariableValue('--bs-gray-500');
-        var borderColor = KTUtil.getCssVariableValue('--bs-border-dashed-color');
-        var baseColor = KTUtil.getCssVariableValue('--bs-primary');
-        var secondaryColor = KTUtil.getCssVariableValue('--bs-gray-300');
-
-        var options = {
-            series: [{
-                name: 'Sales',
-                data: [30, 60, 53, 45, 60, 75, 53]
-            }, ],
-            chart: {
-                fontFamily: 'inherit',
-                type: 'bar',
-                height: height,
-                toolbar: {
-                    show: false
-                },
-                sparkline: {
-                    enabled: true
-                }
-            },
-            plotOptions: {
-                bar: {
-                    horizontal: false,
-                    columnWidth: ['55%'],
-                    borderRadius: 6
-                }
-            },
-            legend: {
-                show: false,
-            },
-            dataLabels: {
-                enabled: false
-            },
-            stroke: {
-                show: true,
-                width: 9,
-                colors: ['transparent']
-            },
-            xaxis: {                
-                axisBorder: {
-                    show: false,
-                },
-                axisTicks: {
-                    show: false,
-                    tickPlacement: 'between'
-                },
-                labels: {
-                    show: false,
-                    style: {
-                        colors: labelColor,
-                        fontSize: '12px'
-                    }
-                },
-                crosshairs: {
-                    show: false
-                }
-            },
-            yaxis: {
-                labels: {
-                    show: false,
-                    style: {
-                        colors: labelColor,
-                        fontSize: '12px'
-                    }
-                }
-            },
-            fill: {
-                type: 'solid'
-            },
-            states: {
-                normal: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                hover: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                active: {
-                    allowMultipleDataPointsSelection: false,
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                }
-            },
-            tooltip: {
-                style: {
-                    fontSize: '12px'
-                },
-                x: {
-                    formatter: function (val) {
-                        return 'Impressions: ' + val;
-                    }
-                },
-                y: {
-                    formatter: function (val) {
-                        return "$" + val + "K"
-                    }
-                }
-            },
-            colors: [baseColor, secondaryColor],
-            grid: {
-                padding: {
-                    left: 10,
-                    right: 10
-                },
-                borderColor: borderColor,
-                strokeDashArray: 4,
-                yaxis: {
-                    lines: {
-                        show: true
-                    }
-                }             
-            }
-        }; 
-
-        var chart = new ApexCharts(element, options);
-        
-        // Set timeout to properly get the parent elements width
-        setTimeout(function() {
-            chart.render();   
-        }, 300);     
-    }
-
-    // Public methods
-    return {
-        init: function () {
-            initChart();
-        }   
-    }
-}();
-
-// Webpack support
-if (typeof module !== 'undefined') {
-    module.exports = KTCardsWidget6;
-}
-
-// On document ready
-KTUtil.onDOMContentLoaded(function() {
-    KTCardsWidget6.init();
-});
-   
-        
-        
-        
-           
-"use strict";
-
-// Class definition
-var KTCardWidget8 = function () {
-    // Private methods
-    var initChart = function() {
-        var element = document.getElementById("kt_card_widget_8_chart");
-
-        if (!element) {
-            return;
-        }
-
-        var height = parseInt(KTUtil.css(element, 'height'));       
-        var borderColor = KTUtil.getCssVariableValue('--bs-border-dashed-color');
-        var baseColor = KTUtil.getCssVariableValue('--bs-gray-800');
-        var lightColor = KTUtil.getCssVariableValue('--bs-light-info');
-
-        var options = {
-            series: [{
-                name: 'Net Profit',
-                data: [35, 25, 45, 15, 60, 50, 57, 35, 70, 40, 45, 25, 45, 30, 70]
-            }],
-            chart: {
-                fontFamily: 'inherit',
-                type: 'area',
-                height: height,
-                toolbar: {
-                    show: false
-                }
-            },             
-            legend: {
-                show: false
-            },
-            dataLabels: {
-                enabled: false
-            },
-            fill: {
-                type: 'solid',
-                opacity: 0
-            },
-            stroke: {
-                curve: 'smooth',
-                show: true,
-                width: 2,
-                colors: [baseColor]
-            },
-            xaxis: {                 
-                axisBorder: {
-                    show: false,
-                },
-                axisTicks: {
-                    show: false
-                },
-                labels: {
-                    show: false
-                },
-                crosshairs: {
-                    position: 'front',
-                    stroke: {
-                        color: baseColor,
-                        width: 1,
-                        dashArray: 3
-                    }
-                },
-                tooltip: {
-                    enabled: true,
-                    formatter: undefined,
-                    offsetY: 0,
-                    style: {
-                        fontSize: '12px'
-                    }
-                }
-            },
-            yaxis: {
-                labels: {
-                    show: false
-                }
-            },
-            states: {
-                normal: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                hover: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                active: {
-                    allowMultipleDataPointsSelection: false,
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                }
-            },
-            tooltip: {
-                style: {
-                    fontSize: '12px'
-                },
-                x: {
-                    formatter: function (val) {
-                        return "Impression " + val;
-                    }
-                },
-                y: {
-                    formatter: function (val) {
-                        return "$" + val + " thousands"
-                    }
-                }
-            },
-            colors: [lightColor],
-            grid: {                 
-                strokeDashArray: 4,
-                padding: {
-                    top: 0,
-                    right: -20,
-                    bottom: -20,
-                    left: -20
-                },
-                yaxis: {
-                    lines: {
-                        show: true
-                    }
-                }
-            },
-            markers: {
-                strokeColor: baseColor,
-                strokeWidth: 2
-            }
-        }; 
-
-        var chart = new ApexCharts(element, options);
-        
-        // Set timeout to properly get the parent elements width
-        setTimeout(function() {
-            chart.render();   
-        }, 300);  
-    }
-
-    // Public methods
-    return {
-        init: function () {
-            initChart();
-        }   
-    }
-}();
-
-// Webpack support
-if (typeof module !== 'undefined') {
-    module.exports = KTCardWidget8;
-}
-
-// On document ready
-KTUtil.onDOMContentLoaded(function() {
-    KTCardWidget8.init();
-});
-
-"use strict";
-
-// Class definition
-var KTCardWidget9 = function () {
-    // Private methods
-    var initChart = function() {
-        var element = document.getElementById("kt_card_widget_9_chart");
-
-        if (!element) {
-            return;
-        }
-
-        var height = parseInt(KTUtil.css(element, 'height'));       
-        var borderColor = KTUtil.getCssVariableValue('--bs-border-dashed-color');
-        var baseColor = KTUtil.getCssVariableValue('--bs-gray-800');
-        var lightColor = KTUtil.getCssVariableValue('--bs-light-info');
-
-        var options = {
-            series: [{
-                name: 'Net Profit',
-                data: [35, 25, 35, 15, 40, 60, 25, 40, 70, 30, 55, 45, 45, 30, 50]
-            }],
-            chart: {
-                fontFamily: 'inherit',
-                type: 'area',
-                height: height,
-                toolbar: {
-                    show: false
-                }
-            },             
-            legend: {
-                show: false
-            },
-            dataLabels: {
-                enabled: false
-            },
-            fill: {
-                type: 'solid',
-                opacity: 0
-            },
-            stroke: {
-                curve: 'smooth',
-                show: true,
-                width: 2,
-                colors: [baseColor]
-            },
-            xaxis: {                 
-                axisBorder: {
-                    show: false,
-                },
-                axisTicks: {
-                    show: false
-                },
-                labels: {
-                    show: false
-                },
-                crosshairs: {
-                    position: 'front',
-                    stroke: {
-                        color: baseColor,
-                        width: 1,
-                        dashArray: 3
-                    }
-                },
-                tooltip: {
-                    enabled: true,
-                    formatter: undefined,
-                    offsetY: 0,
-                    style: {
-                        fontSize: '12px'
-                    }
-                }
-            },
-            yaxis: {
-                labels: {
-                    show: false
-                }
-            },
-            states: {
-                normal: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                hover: {
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                },
-                active: {
-                    allowMultipleDataPointsSelection: false,
-                    filter: {
-                        type: 'none',
-                        value: 0
-                    }
-                }
-            },
-            tooltip: {
-                style: {
-                    fontSize: '12px'
-                },
-                x: {
-                    formatter: function (val) {
-                        return "Sales " + val;
-                    }
-                },
-                y: {
-                    formatter: function (val) {
-                        return "$" + val + " thousands"
-                    }
-                }
-            },
-            colors: [lightColor],
-            grid: {                 
-                strokeDashArray: 4,
-                padding: {
-                    top: 0,
-                    right: -20,
-                    bottom: -20,
-                    left: -20
-                },
-                yaxis: {
-                    lines: {
-                        show: true
-                    }
-                }
-            },
-            markers: {
-                strokeColor: baseColor,
-                strokeWidth: 2
-            }
-        }; 
-
-        var chart = new ApexCharts(element, options);
-        
-        // Set timeout to properly get the parent elements width
-        setTimeout(function() {
-            chart.render();   
-        }, 300);  
-    }
-
-    // Public methods
-    return {
-        init: function () {
-            initChart();
-        }   
-    }
-}();
-
-// Webpack support
-if (typeof module !== 'undefined') {
-    module.exports = KTCardWidget9;
-}
-
-// On document ready
-KTUtil.onDOMContentLoaded(function() {
-    KTCardWidget9.init();
-});
 "use strict";
 
 // Class definition

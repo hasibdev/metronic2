@@ -46543,6 +46543,504 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
+    var Cell = function (initial) {
+      var value = initial;
+      var get = function () {
+        return value;
+      };
+      var set = function (v) {
+        value = v;
+      };
+      return {
+        get: get,
+        set: set
+      };
+    };
+
+    var hasOwnProperty = Object.hasOwnProperty;
+    var has = function (obj, key) {
+      return hasOwnProperty.call(obj, key);
+    };
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Delay');
+
+    var fireResizeEditor = function (editor) {
+      return editor.fire('ResizeEditor');
+    };
+
+    var getAutoResizeMinHeight = function (editor) {
+      return editor.getParam('min_height', editor.getElement().offsetHeight, 'number');
+    };
+    var getAutoResizeMaxHeight = function (editor) {
+      return editor.getParam('max_height', 0, 'number');
+    };
+    var getAutoResizeOverflowPadding = function (editor) {
+      return editor.getParam('autoresize_overflow_padding', 1, 'number');
+    };
+    var getAutoResizeBottomMargin = function (editor) {
+      return editor.getParam('autoresize_bottom_margin', 50, 'number');
+    };
+    var shouldAutoResizeOnInit = function (editor) {
+      return editor.getParam('autoresize_on_init', true, 'boolean');
+    };
+
+    var isFullscreen = function (editor) {
+      return editor.plugins.fullscreen && editor.plugins.fullscreen.isFullscreen();
+    };
+    var wait = function (editor, oldSize, times, interval, callback) {
+      global.setEditorTimeout(editor, function () {
+        resize(editor, oldSize);
+        if (times--) {
+          wait(editor, oldSize, times, interval, callback);
+        } else if (callback) {
+          callback();
+        }
+      }, interval);
+    };
+    var toggleScrolling = function (editor, state) {
+      var body = editor.getBody();
+      if (body) {
+        body.style.overflowY = state ? '' : 'hidden';
+        if (!state) {
+          body.scrollTop = 0;
+        }
+      }
+    };
+    var parseCssValueToInt = function (dom, elm, name, computed) {
+      var value = parseInt(dom.getStyle(elm, name, computed), 10);
+      return isNaN(value) ? 0 : value;
+    };
+    var shouldScrollIntoView = function (trigger) {
+      if ((trigger === null || trigger === void 0 ? void 0 : trigger.type.toLowerCase()) === 'setcontent') {
+        var setContentEvent = trigger;
+        return setContentEvent.selection === true || setContentEvent.paste === true;
+      } else {
+        return false;
+      }
+    };
+    var resize = function (editor, oldSize, trigger) {
+      var dom = editor.dom;
+      var doc = editor.getDoc();
+      if (!doc) {
+        return;
+      }
+      if (isFullscreen(editor)) {
+        toggleScrolling(editor, true);
+        return;
+      }
+      var docEle = doc.documentElement;
+      var resizeBottomMargin = getAutoResizeBottomMargin(editor);
+      var resizeHeight = getAutoResizeMinHeight(editor);
+      var marginTop = parseCssValueToInt(dom, docEle, 'margin-top', true);
+      var marginBottom = parseCssValueToInt(dom, docEle, 'margin-bottom', true);
+      var contentHeight = docEle.offsetHeight + marginTop + marginBottom + resizeBottomMargin;
+      if (contentHeight < 0) {
+        contentHeight = 0;
+      }
+      var containerHeight = editor.getContainer().offsetHeight;
+      var contentAreaHeight = editor.getContentAreaContainer().offsetHeight;
+      var chromeHeight = containerHeight - contentAreaHeight;
+      if (contentHeight + chromeHeight > getAutoResizeMinHeight(editor)) {
+        resizeHeight = contentHeight + chromeHeight;
+      }
+      var maxHeight = getAutoResizeMaxHeight(editor);
+      if (maxHeight && resizeHeight > maxHeight) {
+        resizeHeight = maxHeight;
+        toggleScrolling(editor, true);
+      } else {
+        toggleScrolling(editor, false);
+      }
+      if (resizeHeight !== oldSize.get()) {
+        var deltaSize = resizeHeight - oldSize.get();
+        dom.setStyle(editor.getContainer(), 'height', resizeHeight + 'px');
+        oldSize.set(resizeHeight);
+        fireResizeEditor(editor);
+        if (global$1.browser.isSafari() && global$1.mac) {
+          var win = editor.getWin();
+          win.scrollTo(win.pageXOffset, win.pageYOffset);
+        }
+        if (editor.hasFocus() && shouldScrollIntoView(trigger)) {
+          editor.selection.scrollIntoView();
+        }
+        if (global$1.webkit && deltaSize < 0) {
+          resize(editor, oldSize, trigger);
+        }
+      }
+    };
+    var setup = function (editor, oldSize) {
+      editor.on('init', function () {
+        var overflowPadding = getAutoResizeOverflowPadding(editor);
+        var dom = editor.dom;
+        dom.setStyles(editor.getDoc().documentElement, { height: 'auto' });
+        dom.setStyles(editor.getBody(), {
+          'paddingLeft': overflowPadding,
+          'paddingRight': overflowPadding,
+          'min-height': 0
+        });
+      });
+      editor.on('NodeChange SetContent keyup FullscreenStateChanged ResizeContent', function (e) {
+        resize(editor, oldSize, e);
+      });
+      if (shouldAutoResizeOnInit(editor)) {
+        editor.on('init', function () {
+          wait(editor, oldSize, 20, 100, function () {
+            wait(editor, oldSize, 5, 1000);
+          });
+        });
+      }
+    };
+
+    var register = function (editor, oldSize) {
+      editor.addCommand('mceAutoResize', function () {
+        resize(editor, oldSize);
+      });
+    };
+
+    function Plugin () {
+      global$2.add('autoresize', function (editor) {
+        if (!has(editor.settings, 'resize')) {
+          editor.settings.resize = false;
+        }
+        if (!editor.inline) {
+          var oldSize = Cell(0);
+          register(editor, oldSize);
+          setup(editor, oldSize);
+        }
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
+    var global$4 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var eq = function (t) {
+      return function (a) {
+        return t === a;
+      };
+    };
+    var isUndefined = eq(undefined);
+
+    var global$3 = tinymce.util.Tools.resolve('tinymce.util.Delay');
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.util.LocalStorage');
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var fireRestoreDraft = function (editor) {
+      return editor.fire('RestoreDraft');
+    };
+    var fireStoreDraft = function (editor) {
+      return editor.fire('StoreDraft');
+    };
+    var fireRemoveDraft = function (editor) {
+      return editor.fire('RemoveDraft');
+    };
+
+    var parse = function (timeString, defaultTime) {
+      var multiples = {
+        s: 1000,
+        m: 60000
+      };
+      var toParse = timeString || defaultTime;
+      var parsedTime = /^(\d+)([ms]?)$/.exec('' + toParse);
+      return (parsedTime[2] ? multiples[parsedTime[2]] : 1) * parseInt(toParse, 10);
+    };
+
+    var shouldAskBeforeUnload = function (editor) {
+      return editor.getParam('autosave_ask_before_unload', true);
+    };
+    var getAutoSavePrefix = function (editor) {
+      var location = document.location;
+      return editor.getParam('autosave_prefix', 'tinymce-autosave-{path}{query}{hash}-{id}-').replace(/{path}/g, location.pathname).replace(/{query}/g, location.search).replace(/{hash}/g, location.hash).replace(/{id}/g, editor.id);
+    };
+    var shouldRestoreWhenEmpty = function (editor) {
+      return editor.getParam('autosave_restore_when_empty', false);
+    };
+    var getAutoSaveInterval = function (editor) {
+      return parse(editor.getParam('autosave_interval'), '30s');
+    };
+    var getAutoSaveRetention = function (editor) {
+      return parse(editor.getParam('autosave_retention'), '20m');
+    };
+
+    var isEmpty = function (editor, html) {
+      if (isUndefined(html)) {
+        return editor.dom.isEmpty(editor.getBody());
+      } else {
+        var trimmedHtml = global$1.trim(html);
+        if (trimmedHtml === '') {
+          return true;
+        } else {
+          var fragment = new DOMParser().parseFromString(trimmedHtml, 'text/html');
+          return editor.dom.isEmpty(fragment);
+        }
+      }
+    };
+    var hasDraft = function (editor) {
+      var time = parseInt(global$2.getItem(getAutoSavePrefix(editor) + 'time'), 10) || 0;
+      if (new Date().getTime() - time > getAutoSaveRetention(editor)) {
+        removeDraft(editor, false);
+        return false;
+      }
+      return true;
+    };
+    var removeDraft = function (editor, fire) {
+      var prefix = getAutoSavePrefix(editor);
+      global$2.removeItem(prefix + 'draft');
+      global$2.removeItem(prefix + 'time');
+      if (fire !== false) {
+        fireRemoveDraft(editor);
+      }
+    };
+    var storeDraft = function (editor) {
+      var prefix = getAutoSavePrefix(editor);
+      if (!isEmpty(editor) && editor.isDirty()) {
+        global$2.setItem(prefix + 'draft', editor.getContent({
+          format: 'raw',
+          no_events: true
+        }));
+        global$2.setItem(prefix + 'time', new Date().getTime().toString());
+        fireStoreDraft(editor);
+      }
+    };
+    var restoreDraft = function (editor) {
+      var prefix = getAutoSavePrefix(editor);
+      if (hasDraft(editor)) {
+        editor.setContent(global$2.getItem(prefix + 'draft'), { format: 'raw' });
+        fireRestoreDraft(editor);
+      }
+    };
+    var startStoreDraft = function (editor) {
+      var interval = getAutoSaveInterval(editor);
+      global$3.setEditorInterval(editor, function () {
+        storeDraft(editor);
+      }, interval);
+    };
+    var restoreLastDraft = function (editor) {
+      editor.undoManager.transact(function () {
+        restoreDraft(editor);
+        removeDraft(editor);
+      });
+      editor.focus();
+    };
+
+    var get = function (editor) {
+      return {
+        hasDraft: function () {
+          return hasDraft(editor);
+        },
+        storeDraft: function () {
+          return storeDraft(editor);
+        },
+        restoreDraft: function () {
+          return restoreDraft(editor);
+        },
+        removeDraft: function (fire) {
+          return removeDraft(editor, fire);
+        },
+        isEmpty: function (html) {
+          return isEmpty(editor, html);
+        }
+      };
+    };
+
+    var global = tinymce.util.Tools.resolve('tinymce.EditorManager');
+
+    var setup = function (editor) {
+      editor.editorManager.on('BeforeUnload', function (e) {
+        var msg;
+        global$1.each(global.get(), function (editor) {
+          if (editor.plugins.autosave) {
+            editor.plugins.autosave.storeDraft();
+          }
+          if (!msg && editor.isDirty() && shouldAskBeforeUnload(editor)) {
+            msg = editor.translate('You have unsaved changes are you sure you want to navigate away?');
+          }
+        });
+        if (msg) {
+          e.preventDefault();
+          e.returnValue = msg;
+        }
+      });
+    };
+
+    var makeSetupHandler = function (editor) {
+      return function (api) {
+        api.setDisabled(!hasDraft(editor));
+        var editorEventCallback = function () {
+          return api.setDisabled(!hasDraft(editor));
+        };
+        editor.on('StoreDraft RestoreDraft RemoveDraft', editorEventCallback);
+        return function () {
+          return editor.off('StoreDraft RestoreDraft RemoveDraft', editorEventCallback);
+        };
+      };
+    };
+    var register = function (editor) {
+      startStoreDraft(editor);
+      editor.ui.registry.addButton('restoredraft', {
+        tooltip: 'Restore last draft',
+        icon: 'restore-draft',
+        onAction: function () {
+          restoreLastDraft(editor);
+        },
+        onSetup: makeSetupHandler(editor)
+      });
+      editor.ui.registry.addMenuItem('restoredraft', {
+        text: 'Restore last draft',
+        icon: 'restore-draft',
+        onAction: function () {
+          restoreLastDraft(editor);
+        },
+        onSetup: makeSetupHandler(editor)
+      });
+    };
+
+    function Plugin () {
+      global$4.add('autosave', function (editor) {
+        setup(editor);
+        register(editor);
+        editor.on('init', function () {
+          if (shouldRestoreWhenEmpty(editor) && editor.dom.isEmpty(editor.getBody())) {
+            restoreDraft(editor);
+          }
+        });
+        return get(editor);
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var html2bbcode = function (s) {
+      s = global.trim(s);
+      var rep = function (re, str) {
+        s = s.replace(re, str);
+      };
+      rep(/<a.*?href=\"(.*?)\".*?>(.*?)<\/a>/gi, '[url=$1]$2[/url]');
+      rep(/<font.*?color=\"(.*?)\".*?class=\"codeStyle\".*?>(.*?)<\/font>/gi, '[code][color=$1]$2[/color][/code]');
+      rep(/<font.*?color=\"(.*?)\".*?class=\"quoteStyle\".*?>(.*?)<\/font>/gi, '[quote][color=$1]$2[/color][/quote]');
+      rep(/<font.*?class=\"codeStyle\".*?color=\"(.*?)\".*?>(.*?)<\/font>/gi, '[code][color=$1]$2[/color][/code]');
+      rep(/<font.*?class=\"quoteStyle\".*?color=\"(.*?)\".*?>(.*?)<\/font>/gi, '[quote][color=$1]$2[/color][/quote]');
+      rep(/<span style=\"color: ?(.*?);\">(.*?)<\/span>/gi, '[color=$1]$2[/color]');
+      rep(/<font.*?color=\"(.*?)\".*?>(.*?)<\/font>/gi, '[color=$1]$2[/color]');
+      rep(/<span style=\"font-size:(.*?);\">(.*?)<\/span>/gi, '[size=$1]$2[/size]');
+      rep(/<font>(.*?)<\/font>/gi, '$1');
+      rep(/<img.*?src=\"(.*?)\".*?\/>/gi, '[img]$1[/img]');
+      rep(/<span class=\"codeStyle\">(.*?)<\/span>/gi, '[code]$1[/code]');
+      rep(/<span class=\"quoteStyle\">(.*?)<\/span>/gi, '[quote]$1[/quote]');
+      rep(/<strong class=\"codeStyle\">(.*?)<\/strong>/gi, '[code][b]$1[/b][/code]');
+      rep(/<strong class=\"quoteStyle\">(.*?)<\/strong>/gi, '[quote][b]$1[/b][/quote]');
+      rep(/<em class=\"codeStyle\">(.*?)<\/em>/gi, '[code][i]$1[/i][/code]');
+      rep(/<em class=\"quoteStyle\">(.*?)<\/em>/gi, '[quote][i]$1[/i][/quote]');
+      rep(/<u class=\"codeStyle\">(.*?)<\/u>/gi, '[code][u]$1[/u][/code]');
+      rep(/<u class=\"quoteStyle\">(.*?)<\/u>/gi, '[quote][u]$1[/u][/quote]');
+      rep(/<\/(strong|b)>/gi, '[/b]');
+      rep(/<(strong|b)>/gi, '[b]');
+      rep(/<\/(em|i)>/gi, '[/i]');
+      rep(/<(em|i)>/gi, '[i]');
+      rep(/<\/u>/gi, '[/u]');
+      rep(/<span style=\"text-decoration: ?underline;\">(.*?)<\/span>/gi, '[u]$1[/u]');
+      rep(/<u>/gi, '[u]');
+      rep(/<blockquote[^>]*>/gi, '[quote]');
+      rep(/<\/blockquote>/gi, '[/quote]');
+      rep(/<br \/>/gi, '\n');
+      rep(/<br\/>/gi, '\n');
+      rep(/<br>/gi, '\n');
+      rep(/<p>/gi, '');
+      rep(/<\/p>/gi, '\n');
+      rep(/&nbsp;|\u00a0/gi, ' ');
+      rep(/&quot;/gi, '"');
+      rep(/&lt;/gi, '<');
+      rep(/&gt;/gi, '>');
+      rep(/&amp;/gi, '&');
+      return s;
+    };
+    var bbcode2html = function (s) {
+      s = global.trim(s);
+      var rep = function (re, str) {
+        s = s.replace(re, str);
+      };
+      rep(/\n/gi, '<br />');
+      rep(/\[b\]/gi, '<strong>');
+      rep(/\[\/b\]/gi, '</strong>');
+      rep(/\[i\]/gi, '<em>');
+      rep(/\[\/i\]/gi, '</em>');
+      rep(/\[u\]/gi, '<u>');
+      rep(/\[\/u\]/gi, '</u>');
+      rep(/\[url=([^\]]+)\](.*?)\[\/url\]/gi, '<a href="$1">$2</a>');
+      rep(/\[url\](.*?)\[\/url\]/gi, '<a href="$1">$1</a>');
+      rep(/\[img\](.*?)\[\/img\]/gi, '<img src="$1" />');
+      rep(/\[color=(.*?)\](.*?)\[\/color\]/gi, '<font color="$1">$2</font>');
+      rep(/\[code\](.*?)\[\/code\]/gi, '<span class="codeStyle">$1</span>&nbsp;');
+      rep(/\[quote.*?\](.*?)\[\/quote\]/gi, '<span class="quoteStyle">$1</span>&nbsp;');
+      return s;
+    };
+
+    function Plugin () {
+      global$1.add('bbcode', function (editor) {
+        editor.on('BeforeSetContent', function (e) {
+          e.content = bbcode2html(e.content);
+        });
+        editor.on('PostProcess', function (e) {
+          if (e.set) {
+            e.content = bbcode2html(e.content);
+          }
+          if (e.get) {
+            e.content = html2bbcode(e.content);
+          }
+        });
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
     var global$2 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     var fireInsertCustomChar = function (editor, chr) {
@@ -48240,88 +48738,80 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+    var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
-    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var html2bbcode = function (s) {
-      s = global.trim(s);
-      var rep = function (re, str) {
-        s = s.replace(re, str);
-      };
-      rep(/<a.*?href=\"(.*?)\".*?>(.*?)<\/a>/gi, '[url=$1]$2[/url]');
-      rep(/<font.*?color=\"(.*?)\".*?class=\"codeStyle\".*?>(.*?)<\/font>/gi, '[code][color=$1]$2[/color][/code]');
-      rep(/<font.*?color=\"(.*?)\".*?class=\"quoteStyle\".*?>(.*?)<\/font>/gi, '[quote][color=$1]$2[/color][/quote]');
-      rep(/<font.*?class=\"codeStyle\".*?color=\"(.*?)\".*?>(.*?)<\/font>/gi, '[code][color=$1]$2[/color][/code]');
-      rep(/<font.*?class=\"quoteStyle\".*?color=\"(.*?)\".*?>(.*?)<\/font>/gi, '[quote][color=$1]$2[/color][/quote]');
-      rep(/<span style=\"color: ?(.*?);\">(.*?)<\/span>/gi, '[color=$1]$2[/color]');
-      rep(/<font.*?color=\"(.*?)\".*?>(.*?)<\/font>/gi, '[color=$1]$2[/color]');
-      rep(/<span style=\"font-size:(.*?);\">(.*?)<\/span>/gi, '[size=$1]$2[/size]');
-      rep(/<font>(.*?)<\/font>/gi, '$1');
-      rep(/<img.*?src=\"(.*?)\".*?\/>/gi, '[img]$1[/img]');
-      rep(/<span class=\"codeStyle\">(.*?)<\/span>/gi, '[code]$1[/code]');
-      rep(/<span class=\"quoteStyle\">(.*?)<\/span>/gi, '[quote]$1[/quote]');
-      rep(/<strong class=\"codeStyle\">(.*?)<\/strong>/gi, '[code][b]$1[/b][/code]');
-      rep(/<strong class=\"quoteStyle\">(.*?)<\/strong>/gi, '[quote][b]$1[/b][/quote]');
-      rep(/<em class=\"codeStyle\">(.*?)<\/em>/gi, '[code][i]$1[/i][/code]');
-      rep(/<em class=\"quoteStyle\">(.*?)<\/em>/gi, '[quote][i]$1[/i][/quote]');
-      rep(/<u class=\"codeStyle\">(.*?)<\/u>/gi, '[code][u]$1[/u][/code]');
-      rep(/<u class=\"quoteStyle\">(.*?)<\/u>/gi, '[quote][u]$1[/u][/quote]');
-      rep(/<\/(strong|b)>/gi, '[/b]');
-      rep(/<(strong|b)>/gi, '[b]');
-      rep(/<\/(em|i)>/gi, '[/i]');
-      rep(/<(em|i)>/gi, '[i]');
-      rep(/<\/u>/gi, '[/u]');
-      rep(/<span style=\"text-decoration: ?underline;\">(.*?)<\/span>/gi, '[u]$1[/u]');
-      rep(/<u>/gi, '[u]');
-      rep(/<blockquote[^>]*>/gi, '[quote]');
-      rep(/<\/blockquote>/gi, '[/quote]');
-      rep(/<br \/>/gi, '\n');
-      rep(/<br\/>/gi, '\n');
-      rep(/<br>/gi, '\n');
-      rep(/<p>/gi, '');
-      rep(/<\/p>/gi, '\n');
-      rep(/&nbsp;|\u00a0/gi, ' ');
-      rep(/&quot;/gi, '"');
-      rep(/&lt;/gi, '<');
-      rep(/&gt;/gi, '>');
-      rep(/&amp;/gi, '&');
-      return s;
+    var setContent = function (editor, html) {
+      editor.focus();
+      editor.undoManager.transact(function () {
+        editor.setContent(html);
+      });
+      editor.selection.setCursorLocation();
+      editor.nodeChanged();
     };
-    var bbcode2html = function (s) {
-      s = global.trim(s);
-      var rep = function (re, str) {
-        s = s.replace(re, str);
+    var getContent = function (editor) {
+      return editor.getContent({ source_view: true });
+    };
+
+    var open = function (editor) {
+      var editorContent = getContent(editor);
+      editor.windowManager.open({
+        title: 'Source Code',
+        size: 'large',
+        body: {
+          type: 'panel',
+          items: [{
+              type: 'textarea',
+              name: 'code'
+            }]
+        },
+        buttons: [
+          {
+            type: 'cancel',
+            name: 'cancel',
+            text: 'Cancel'
+          },
+          {
+            type: 'submit',
+            name: 'save',
+            text: 'Save',
+            primary: true
+          }
+        ],
+        initialData: { code: editorContent },
+        onSubmit: function (api) {
+          setContent(editor, api.getData().code);
+          api.close();
+        }
+      });
+    };
+
+    var register$1 = function (editor) {
+      editor.addCommand('mceCodeEditor', function () {
+        open(editor);
+      });
+    };
+
+    var register = function (editor) {
+      var onAction = function () {
+        return editor.execCommand('mceCodeEditor');
       };
-      rep(/\n/gi, '<br />');
-      rep(/\[b\]/gi, '<strong>');
-      rep(/\[\/b\]/gi, '</strong>');
-      rep(/\[i\]/gi, '<em>');
-      rep(/\[\/i\]/gi, '</em>');
-      rep(/\[u\]/gi, '<u>');
-      rep(/\[\/u\]/gi, '</u>');
-      rep(/\[url=([^\]]+)\](.*?)\[\/url\]/gi, '<a href="$1">$2</a>');
-      rep(/\[url\](.*?)\[\/url\]/gi, '<a href="$1">$1</a>');
-      rep(/\[img\](.*?)\[\/img\]/gi, '<img src="$1" />');
-      rep(/\[color=(.*?)\](.*?)\[\/color\]/gi, '<font color="$1">$2</font>');
-      rep(/\[code\](.*?)\[\/code\]/gi, '<span class="codeStyle">$1</span>&nbsp;');
-      rep(/\[quote.*?\](.*?)\[\/quote\]/gi, '<span class="quoteStyle">$1</span>&nbsp;');
-      return s;
+      editor.ui.registry.addButton('code', {
+        icon: 'sourcecode',
+        tooltip: 'Source code',
+        onAction: onAction
+      });
+      editor.ui.registry.addMenuItem('code', {
+        icon: 'sourcecode',
+        text: 'Source code',
+        onAction: onAction
+      });
     };
 
     function Plugin () {
-      global$1.add('bbcode', function (editor) {
-        editor.on('BeforeSetContent', function (e) {
-          e.content = bbcode2html(e.content);
-        });
-        editor.on('PostProcess', function (e) {
-          if (e.set) {
-            e.content = bbcode2html(e.content);
-          }
-          if (e.get) {
-            e.content = html2bbcode(e.content);
-          }
-        });
+      global.add('code', function (editor) {
+        register$1(editor);
+        register(editor);
+        return {};
       });
     }
 
@@ -50680,191 +51170,6 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var Cell = function (initial) {
-      var value = initial;
-      var get = function () {
-        return value;
-      };
-      var set = function (v) {
-        value = v;
-      };
-      return {
-        get: get,
-        set: set
-      };
-    };
-
-    var hasOwnProperty = Object.hasOwnProperty;
-    var has = function (obj, key) {
-      return hasOwnProperty.call(obj, key);
-    };
-
-    var global$2 = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.Delay');
-
-    var fireResizeEditor = function (editor) {
-      return editor.fire('ResizeEditor');
-    };
-
-    var getAutoResizeMinHeight = function (editor) {
-      return editor.getParam('min_height', editor.getElement().offsetHeight, 'number');
-    };
-    var getAutoResizeMaxHeight = function (editor) {
-      return editor.getParam('max_height', 0, 'number');
-    };
-    var getAutoResizeOverflowPadding = function (editor) {
-      return editor.getParam('autoresize_overflow_padding', 1, 'number');
-    };
-    var getAutoResizeBottomMargin = function (editor) {
-      return editor.getParam('autoresize_bottom_margin', 50, 'number');
-    };
-    var shouldAutoResizeOnInit = function (editor) {
-      return editor.getParam('autoresize_on_init', true, 'boolean');
-    };
-
-    var isFullscreen = function (editor) {
-      return editor.plugins.fullscreen && editor.plugins.fullscreen.isFullscreen();
-    };
-    var wait = function (editor, oldSize, times, interval, callback) {
-      global.setEditorTimeout(editor, function () {
-        resize(editor, oldSize);
-        if (times--) {
-          wait(editor, oldSize, times, interval, callback);
-        } else if (callback) {
-          callback();
-        }
-      }, interval);
-    };
-    var toggleScrolling = function (editor, state) {
-      var body = editor.getBody();
-      if (body) {
-        body.style.overflowY = state ? '' : 'hidden';
-        if (!state) {
-          body.scrollTop = 0;
-        }
-      }
-    };
-    var parseCssValueToInt = function (dom, elm, name, computed) {
-      var value = parseInt(dom.getStyle(elm, name, computed), 10);
-      return isNaN(value) ? 0 : value;
-    };
-    var shouldScrollIntoView = function (trigger) {
-      if ((trigger === null || trigger === void 0 ? void 0 : trigger.type.toLowerCase()) === 'setcontent') {
-        var setContentEvent = trigger;
-        return setContentEvent.selection === true || setContentEvent.paste === true;
-      } else {
-        return false;
-      }
-    };
-    var resize = function (editor, oldSize, trigger) {
-      var dom = editor.dom;
-      var doc = editor.getDoc();
-      if (!doc) {
-        return;
-      }
-      if (isFullscreen(editor)) {
-        toggleScrolling(editor, true);
-        return;
-      }
-      var docEle = doc.documentElement;
-      var resizeBottomMargin = getAutoResizeBottomMargin(editor);
-      var resizeHeight = getAutoResizeMinHeight(editor);
-      var marginTop = parseCssValueToInt(dom, docEle, 'margin-top', true);
-      var marginBottom = parseCssValueToInt(dom, docEle, 'margin-bottom', true);
-      var contentHeight = docEle.offsetHeight + marginTop + marginBottom + resizeBottomMargin;
-      if (contentHeight < 0) {
-        contentHeight = 0;
-      }
-      var containerHeight = editor.getContainer().offsetHeight;
-      var contentAreaHeight = editor.getContentAreaContainer().offsetHeight;
-      var chromeHeight = containerHeight - contentAreaHeight;
-      if (contentHeight + chromeHeight > getAutoResizeMinHeight(editor)) {
-        resizeHeight = contentHeight + chromeHeight;
-      }
-      var maxHeight = getAutoResizeMaxHeight(editor);
-      if (maxHeight && resizeHeight > maxHeight) {
-        resizeHeight = maxHeight;
-        toggleScrolling(editor, true);
-      } else {
-        toggleScrolling(editor, false);
-      }
-      if (resizeHeight !== oldSize.get()) {
-        var deltaSize = resizeHeight - oldSize.get();
-        dom.setStyle(editor.getContainer(), 'height', resizeHeight + 'px');
-        oldSize.set(resizeHeight);
-        fireResizeEditor(editor);
-        if (global$1.browser.isSafari() && global$1.mac) {
-          var win = editor.getWin();
-          win.scrollTo(win.pageXOffset, win.pageYOffset);
-        }
-        if (editor.hasFocus() && shouldScrollIntoView(trigger)) {
-          editor.selection.scrollIntoView();
-        }
-        if (global$1.webkit && deltaSize < 0) {
-          resize(editor, oldSize, trigger);
-        }
-      }
-    };
-    var setup = function (editor, oldSize) {
-      editor.on('init', function () {
-        var overflowPadding = getAutoResizeOverflowPadding(editor);
-        var dom = editor.dom;
-        dom.setStyles(editor.getDoc().documentElement, { height: 'auto' });
-        dom.setStyles(editor.getBody(), {
-          'paddingLeft': overflowPadding,
-          'paddingRight': overflowPadding,
-          'min-height': 0
-        });
-      });
-      editor.on('NodeChange SetContent keyup FullscreenStateChanged ResizeContent', function (e) {
-        resize(editor, oldSize, e);
-      });
-      if (shouldAutoResizeOnInit(editor)) {
-        editor.on('init', function () {
-          wait(editor, oldSize, 20, 100, function () {
-            wait(editor, oldSize, 5, 1000);
-          });
-        });
-      }
-    };
-
-    var register = function (editor, oldSize) {
-      editor.addCommand('mceAutoResize', function () {
-        resize(editor, oldSize);
-      });
-    };
-
-    function Plugin () {
-      global$2.add('autoresize', function (editor) {
-        if (!has(editor.settings, 'resize')) {
-          editor.settings.resize = false;
-        }
-        if (!editor.inline) {
-          var oldSize = Cell(0);
-          register(editor, oldSize);
-          setup(editor, oldSize);
-        }
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
     var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     function Plugin () {
@@ -51363,201 +51668,625 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$4 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+    var global$3 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     var eq = function (t) {
       return function (a) {
         return t === a;
       };
     };
-    var isUndefined = eq(undefined);
+    var isNull = eq(null);
 
-    var global$3 = tinymce.util.Tools.resolve('tinymce.util.Delay');
-
-    var global$2 = tinymce.util.Tools.resolve('tinymce.util.LocalStorage');
-
-    var global$1 = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var fireRestoreDraft = function (editor) {
-      return editor.fire('RestoreDraft');
+    var noop = function () {
     };
-    var fireStoreDraft = function (editor) {
-      return editor.fire('StoreDraft');
-    };
-    var fireRemoveDraft = function (editor) {
-      return editor.fire('RemoveDraft');
-    };
-
-    var parse = function (timeString, defaultTime) {
-      var multiples = {
-        s: 1000,
-        m: 60000
+    var constant = function (value) {
+      return function () {
+        return value;
       };
-      var toParse = timeString || defaultTime;
-      var parsedTime = /^(\d+)([ms]?)$/.exec('' + toParse);
-      return (parsedTime[2] ? multiples[parsedTime[2]] : 1) * parseInt(toParse, 10);
+    };
+    var identity = function (x) {
+      return x;
+    };
+    var never = constant(false);
+    var always = constant(true);
+
+    var none = function () {
+      return NONE;
+    };
+    var NONE = function () {
+      var call = function (thunk) {
+        return thunk();
+      };
+      var id = identity;
+      var me = {
+        fold: function (n, _s) {
+          return n();
+        },
+        isSome: never,
+        isNone: always,
+        getOr: id,
+        getOrThunk: call,
+        getOrDie: function (msg) {
+          throw new Error(msg || 'error: getOrDie called on none.');
+        },
+        getOrNull: constant(null),
+        getOrUndefined: constant(undefined),
+        or: id,
+        orThunk: call,
+        map: none,
+        each: noop,
+        bind: none,
+        exists: never,
+        forall: always,
+        filter: function () {
+          return none();
+        },
+        toArray: function () {
+          return [];
+        },
+        toString: constant('none()')
+      };
+      return me;
+    }();
+    var some = function (a) {
+      var constant_a = constant(a);
+      var self = function () {
+        return me;
+      };
+      var bind = function (f) {
+        return f(a);
+      };
+      var me = {
+        fold: function (n, s) {
+          return s(a);
+        },
+        isSome: always,
+        isNone: never,
+        getOr: constant_a,
+        getOrThunk: constant_a,
+        getOrDie: constant_a,
+        getOrNull: constant_a,
+        getOrUndefined: constant_a,
+        or: self,
+        orThunk: self,
+        map: function (f) {
+          return some(f(a));
+        },
+        each: function (f) {
+          f(a);
+        },
+        bind: bind,
+        exists: bind,
+        forall: bind,
+        filter: function (f) {
+          return f(a) ? me : NONE;
+        },
+        toArray: function () {
+          return [a];
+        },
+        toString: function () {
+          return 'some(' + a + ')';
+        }
+      };
+      return me;
+    };
+    var from = function (value) {
+      return value === null || value === undefined ? NONE : some(value);
+    };
+    var Optional = {
+      some: some,
+      none: none,
+      from: from
     };
 
-    var shouldAskBeforeUnload = function (editor) {
-      return editor.getParam('autosave_ask_before_unload', true);
-    };
-    var getAutoSavePrefix = function (editor) {
-      var location = document.location;
-      return editor.getParam('autosave_prefix', 'tinymce-autosave-{path}{query}{hash}-{id}-').replace(/{path}/g, location.pathname).replace(/{query}/g, location.search).replace(/{hash}/g, location.hash).replace(/{id}/g, editor.id);
-    };
-    var shouldRestoreWhenEmpty = function (editor) {
-      return editor.getParam('autosave_restore_when_empty', false);
-    };
-    var getAutoSaveInterval = function (editor) {
-      return parse(editor.getParam('autosave_interval'), '30s');
-    };
-    var getAutoSaveRetention = function (editor) {
-      return parse(editor.getParam('autosave_retention'), '20m');
-    };
-
-    var isEmpty = function (editor, html) {
-      if (isUndefined(html)) {
-        return editor.dom.isEmpty(editor.getBody());
-      } else {
-        var trimmedHtml = global$1.trim(html);
-        if (trimmedHtml === '') {
+    var exists = function (xs, pred) {
+      for (var i = 0, len = xs.length; i < len; i++) {
+        var x = xs[i];
+        if (pred(x, i)) {
           return true;
-        } else {
-          var fragment = new DOMParser().parseFromString(trimmedHtml, 'text/html');
-          return editor.dom.isEmpty(fragment);
         }
       }
+      return false;
     };
-    var hasDraft = function (editor) {
-      var time = parseInt(global$2.getItem(getAutoSavePrefix(editor) + 'time'), 10) || 0;
-      if (new Date().getTime() - time > getAutoSaveRetention(editor)) {
-        removeDraft(editor, false);
-        return false;
+    var map$1 = function (xs, f) {
+      var len = xs.length;
+      var r = new Array(len);
+      for (var i = 0; i < len; i++) {
+        var x = xs[i];
+        r[i] = f(x, i);
       }
-      return true;
+      return r;
     };
-    var removeDraft = function (editor, fire) {
-      var prefix = getAutoSavePrefix(editor);
-      global$2.removeItem(prefix + 'draft');
-      global$2.removeItem(prefix + 'time');
-      if (fire !== false) {
-        fireRemoveDraft(editor);
+    var each$1 = function (xs, f) {
+      for (var i = 0, len = xs.length; i < len; i++) {
+        var x = xs[i];
+        f(x, i);
       }
-    };
-    var storeDraft = function (editor) {
-      var prefix = getAutoSavePrefix(editor);
-      if (!isEmpty(editor) && editor.isDirty()) {
-        global$2.setItem(prefix + 'draft', editor.getContent({
-          format: 'raw',
-          no_events: true
-        }));
-        global$2.setItem(prefix + 'time', new Date().getTime().toString());
-        fireStoreDraft(editor);
-      }
-    };
-    var restoreDraft = function (editor) {
-      var prefix = getAutoSavePrefix(editor);
-      if (hasDraft(editor)) {
-        editor.setContent(global$2.getItem(prefix + 'draft'), { format: 'raw' });
-        fireRestoreDraft(editor);
-      }
-    };
-    var startStoreDraft = function (editor) {
-      var interval = getAutoSaveInterval(editor);
-      global$3.setEditorInterval(editor, function () {
-        storeDraft(editor);
-      }, interval);
-    };
-    var restoreLastDraft = function (editor) {
-      editor.undoManager.transact(function () {
-        restoreDraft(editor);
-        removeDraft(editor);
-      });
-      editor.focus();
     };
 
-    var get = function (editor) {
+    var Cell = function (initial) {
+      var value = initial;
+      var get = function () {
+        return value;
+      };
+      var set = function (v) {
+        value = v;
+      };
       return {
-        hasDraft: function () {
-          return hasDraft(editor);
-        },
-        storeDraft: function () {
-          return storeDraft(editor);
-        },
-        restoreDraft: function () {
-          return restoreDraft(editor);
-        },
-        removeDraft: function (fire) {
-          return removeDraft(editor, fire);
-        },
-        isEmpty: function (html) {
-          return isEmpty(editor, html);
-        }
+        get: get,
+        set: set
       };
     };
 
-    var global = tinymce.util.Tools.resolve('tinymce.EditorManager');
+    var last = function (fn, rate) {
+      var timer = null;
+      var cancel = function () {
+        if (!isNull(timer)) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      };
+      var throttle = function () {
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+          args[_i] = arguments[_i];
+        }
+        cancel();
+        timer = setTimeout(function () {
+          timer = null;
+          fn.apply(null, args);
+        }, rate);
+      };
+      return {
+        cancel: cancel,
+        throttle: throttle
+      };
+    };
+
+    var insertEmoticon = function (editor, ch) {
+      editor.insertContent(ch);
+    };
+
+    var __assign = function () {
+      __assign = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+          s = arguments[i];
+          for (var p in s)
+            if (Object.prototype.hasOwnProperty.call(s, p))
+              t[p] = s[p];
+        }
+        return t;
+      };
+      return __assign.apply(this, arguments);
+    };
+
+    var keys = Object.keys;
+    var hasOwnProperty = Object.hasOwnProperty;
+    var each = function (obj, f) {
+      var props = keys(obj);
+      for (var k = 0, len = props.length; k < len; k++) {
+        var i = props[k];
+        var x = obj[i];
+        f(x, i);
+      }
+    };
+    var map = function (obj, f) {
+      return tupleMap(obj, function (x, i) {
+        return {
+          k: i,
+          v: f(x, i)
+        };
+      });
+    };
+    var tupleMap = function (obj, f) {
+      var r = {};
+      each(obj, function (x, i) {
+        var tuple = f(x, i);
+        r[tuple.k] = tuple.v;
+      });
+      return r;
+    };
+    var has = function (obj, key) {
+      return hasOwnProperty.call(obj, key);
+    };
+
+    var shallow = function (old, nu) {
+      return nu;
+    };
+    var baseMerge = function (merger) {
+      return function () {
+        var objects = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+          objects[_i] = arguments[_i];
+        }
+        if (objects.length === 0) {
+          throw new Error('Can\'t merge zero objects');
+        }
+        var ret = {};
+        for (var j = 0; j < objects.length; j++) {
+          var curObject = objects[j];
+          for (var key in curObject) {
+            if (has(curObject, key)) {
+              ret[key] = merger(ret[key], curObject[key]);
+            }
+          }
+        }
+        return ret;
+      };
+    };
+    var merge = baseMerge(shallow);
+
+    var singleton = function (doRevoke) {
+      var subject = Cell(Optional.none());
+      var revoke = function () {
+        return subject.get().each(doRevoke);
+      };
+      var clear = function () {
+        revoke();
+        subject.set(Optional.none());
+      };
+      var isSet = function () {
+        return subject.get().isSome();
+      };
+      var get = function () {
+        return subject.get();
+      };
+      var set = function (s) {
+        revoke();
+        subject.set(Optional.some(s));
+      };
+      return {
+        clear: clear,
+        isSet: isSet,
+        get: get,
+        set: set
+      };
+    };
+    var value = function () {
+      var subject = singleton(noop);
+      var on = function (f) {
+        return subject.get().each(f);
+      };
+      return __assign(__assign({}, subject), { on: on });
+    };
+
+    var checkRange = function (str, substr, start) {
+      return substr === '' || str.length >= substr.length && str.substr(start, start + substr.length) === substr;
+    };
+    var contains = function (str, substr) {
+      return str.indexOf(substr) !== -1;
+    };
+    var startsWith = function (str, prefix) {
+      return checkRange(str, prefix, 0);
+    };
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.Resource');
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.util.Delay');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Promise');
+
+    var DEFAULT_ID = 'tinymce.plugins.emoticons';
+    var getEmoticonDatabase = function (editor) {
+      return editor.getParam('emoticons_database', 'emojis', 'string');
+    };
+    var getEmoticonDatabaseUrl = function (editor, pluginUrl) {
+      var database = getEmoticonDatabase(editor);
+      return editor.getParam('emoticons_database_url', pluginUrl + '/js/' + database + editor.suffix + '.js', 'string');
+    };
+    var getEmoticonDatabaseId = function (editor) {
+      return editor.getParam('emoticons_database_id', DEFAULT_ID, 'string');
+    };
+    var getAppendedEmoticons = function (editor) {
+      return editor.getParam('emoticons_append', {}, 'object');
+    };
+    var getEmotionsImageUrl = function (editor) {
+      return editor.getParam('emoticons_images_url', 'https://twemoji.maxcdn.com/v/13.0.1/72x72/', 'string');
+    };
+
+    var ALL_CATEGORY = 'All';
+    var categoryNameMap = {
+      symbols: 'Symbols',
+      people: 'People',
+      animals_and_nature: 'Animals and Nature',
+      food_and_drink: 'Food and Drink',
+      activity: 'Activity',
+      travel_and_places: 'Travel and Places',
+      objects: 'Objects',
+      flags: 'Flags',
+      user: 'User Defined'
+    };
+    var translateCategory = function (categories, name) {
+      return has(categories, name) ? categories[name] : name;
+    };
+    var getUserDefinedEmoticons = function (editor) {
+      var userDefinedEmoticons = getAppendedEmoticons(editor);
+      return map(userDefinedEmoticons, function (value) {
+        return __assign({
+          keywords: [],
+          category: 'user'
+        }, value);
+      });
+    };
+    var initDatabase = function (editor, databaseUrl, databaseId) {
+      var categories = value();
+      var all = value();
+      var emojiImagesUrl = getEmotionsImageUrl(editor);
+      var getEmoji = function (lib) {
+        if (startsWith(lib.char, '<img')) {
+          return lib.char.replace(/src="([^"]+)"/, function (match, url) {
+            return 'src="' + emojiImagesUrl + url + '"';
+          });
+        } else {
+          return lib.char;
+        }
+      };
+      var processEmojis = function (emojis) {
+        var cats = {};
+        var everything = [];
+        each(emojis, function (lib, title) {
+          var entry = {
+            title: title,
+            keywords: lib.keywords,
+            char: getEmoji(lib),
+            category: translateCategory(categoryNameMap, lib.category)
+          };
+          var current = cats[entry.category] !== undefined ? cats[entry.category] : [];
+          cats[entry.category] = current.concat([entry]);
+          everything.push(entry);
+        });
+        categories.set(cats);
+        all.set(everything);
+      };
+      editor.on('init', function () {
+        global$2.load(databaseId, databaseUrl).then(function (emojis) {
+          var userEmojis = getUserDefinedEmoticons(editor);
+          processEmojis(merge(emojis, userEmojis));
+        }, function (err) {
+          console.log('Failed to load emoticons: ' + err);
+          categories.set({});
+          all.set([]);
+        });
+      });
+      var listCategory = function (category) {
+        if (category === ALL_CATEGORY) {
+          return listAll();
+        }
+        return categories.get().bind(function (cats) {
+          return Optional.from(cats[category]);
+        }).getOr([]);
+      };
+      var listAll = function () {
+        return all.get().getOr([]);
+      };
+      var listCategories = function () {
+        return [ALL_CATEGORY].concat(keys(categories.get().getOr({})));
+      };
+      var waitForLoad = function () {
+        if (hasLoaded()) {
+          return global.resolve(true);
+        } else {
+          return new global(function (resolve, reject) {
+            var numRetries = 15;
+            var interval = global$1.setInterval(function () {
+              if (hasLoaded()) {
+                global$1.clearInterval(interval);
+                resolve(true);
+              } else {
+                numRetries--;
+                if (numRetries < 0) {
+                  console.log('Could not load emojis from url: ' + databaseUrl);
+                  global$1.clearInterval(interval);
+                  reject(false);
+                }
+              }
+            }, 100);
+          });
+        }
+      };
+      var hasLoaded = function () {
+        return categories.isSet() && all.isSet();
+      };
+      return {
+        listCategories: listCategories,
+        hasLoaded: hasLoaded,
+        waitForLoad: waitForLoad,
+        listAll: listAll,
+        listCategory: listCategory
+      };
+    };
+
+    var emojiMatches = function (emoji, lowerCasePattern) {
+      return contains(emoji.title.toLowerCase(), lowerCasePattern) || exists(emoji.keywords, function (k) {
+        return contains(k.toLowerCase(), lowerCasePattern);
+      });
+    };
+    var emojisFrom = function (list, pattern, maxResults) {
+      var matches = [];
+      var lowerCasePattern = pattern.toLowerCase();
+      var reachedLimit = maxResults.fold(function () {
+        return never;
+      }, function (max) {
+        return function (size) {
+          return size >= max;
+        };
+      });
+      for (var i = 0; i < list.length; i++) {
+        if (pattern.length === 0 || emojiMatches(list[i], lowerCasePattern)) {
+          matches.push({
+            value: list[i].char,
+            text: list[i].title,
+            icon: list[i].char
+          });
+          if (reachedLimit(matches.length)) {
+            break;
+          }
+        }
+      }
+      return matches;
+    };
+
+    var patternName = 'pattern';
+    var open = function (editor, database) {
+      var initialState = {
+        pattern: '',
+        results: emojisFrom(database.listAll(), '', Optional.some(300))
+      };
+      var currentTab = Cell(ALL_CATEGORY);
+      var scan = function (dialogApi) {
+        var dialogData = dialogApi.getData();
+        var category = currentTab.get();
+        var candidates = database.listCategory(category);
+        var results = emojisFrom(candidates, dialogData[patternName], category === ALL_CATEGORY ? Optional.some(300) : Optional.none());
+        dialogApi.setData({ results: results });
+      };
+      var updateFilter = last(function (dialogApi) {
+        scan(dialogApi);
+      }, 200);
+      var searchField = {
+        label: 'Search',
+        type: 'input',
+        name: patternName
+      };
+      var resultsField = {
+        type: 'collection',
+        name: 'results'
+      };
+      var getInitialState = function () {
+        var body = {
+          type: 'tabpanel',
+          tabs: map$1(database.listCategories(), function (cat) {
+            return {
+              title: cat,
+              name: cat,
+              items: [
+                searchField,
+                resultsField
+              ]
+            };
+          })
+        };
+        return {
+          title: 'Emoticons',
+          size: 'normal',
+          body: body,
+          initialData: initialState,
+          onTabChange: function (dialogApi, details) {
+            currentTab.set(details.newTabName);
+            updateFilter.throttle(dialogApi);
+          },
+          onChange: updateFilter.throttle,
+          onAction: function (dialogApi, actionData) {
+            if (actionData.name === 'results') {
+              insertEmoticon(editor, actionData.value);
+              dialogApi.close();
+            }
+          },
+          buttons: [{
+              type: 'cancel',
+              text: 'Close',
+              primary: true
+            }]
+        };
+      };
+      var dialogApi = editor.windowManager.open(getInitialState());
+      dialogApi.focus(patternName);
+      if (!database.hasLoaded()) {
+        dialogApi.block('Loading emoticons...');
+        database.waitForLoad().then(function () {
+          dialogApi.redial(getInitialState());
+          updateFilter.throttle(dialogApi);
+          dialogApi.focus(patternName);
+          dialogApi.unblock();
+        }).catch(function (_err) {
+          dialogApi.redial({
+            title: 'Emoticons',
+            body: {
+              type: 'panel',
+              items: [{
+                  type: 'alertbanner',
+                  level: 'error',
+                  icon: 'warning',
+                  text: '<p>Could not load emoticons</p>'
+                }]
+            },
+            buttons: [{
+                type: 'cancel',
+                text: 'Close',
+                primary: true
+              }],
+            initialData: {
+              pattern: '',
+              results: []
+            }
+          });
+          dialogApi.focus(patternName);
+          dialogApi.unblock();
+        });
+      }
+    };
+
+    var register$1 = function (editor, database) {
+      editor.addCommand('mceEmoticons', function () {
+        return open(editor, database);
+      });
+    };
 
     var setup = function (editor) {
-      editor.editorManager.on('BeforeUnload', function (e) {
-        var msg;
-        global$1.each(global.get(), function (editor) {
-          if (editor.plugins.autosave) {
-            editor.plugins.autosave.storeDraft();
-          }
-          if (!msg && editor.isDirty() && shouldAskBeforeUnload(editor)) {
-            msg = editor.translate('You have unsaved changes are you sure you want to navigate away?');
-          }
+      editor.on('PreInit', function () {
+        editor.parser.addAttributeFilter('data-emoticon', function (nodes) {
+          each$1(nodes, function (node) {
+            node.attr('data-mce-resize', 'false');
+            node.attr('data-mce-placeholder', '1');
+          });
         });
-        if (msg) {
-          e.preventDefault();
-          e.returnValue = msg;
+      });
+    };
+
+    var init = function (editor, database) {
+      editor.ui.registry.addAutocompleter('emoticons', {
+        ch: ':',
+        columns: 'auto',
+        minChars: 2,
+        fetch: function (pattern, maxResults) {
+          return database.waitForLoad().then(function () {
+            var candidates = database.listAll();
+            return emojisFrom(candidates, pattern, Optional.some(maxResults));
+          });
+        },
+        onAction: function (autocompleteApi, rng, value) {
+          editor.selection.setRng(rng);
+          editor.insertContent(value);
+          autocompleteApi.hide();
         }
       });
     };
 
-    var makeSetupHandler = function (editor) {
-      return function (api) {
-        api.setDisabled(!hasDraft(editor));
-        var editorEventCallback = function () {
-          return api.setDisabled(!hasDraft(editor));
-        };
-        editor.on('StoreDraft RestoreDraft RemoveDraft', editorEventCallback);
-        return function () {
-          return editor.off('StoreDraft RestoreDraft RemoveDraft', editorEventCallback);
-        };
-      };
-    };
     var register = function (editor) {
-      startStoreDraft(editor);
-      editor.ui.registry.addButton('restoredraft', {
-        tooltip: 'Restore last draft',
-        icon: 'restore-draft',
-        onAction: function () {
-          restoreLastDraft(editor);
-        },
-        onSetup: makeSetupHandler(editor)
+      var onAction = function () {
+        return editor.execCommand('mceEmoticons');
+      };
+      editor.ui.registry.addButton('emoticons', {
+        tooltip: 'Emoticons',
+        icon: 'emoji',
+        onAction: onAction
       });
-      editor.ui.registry.addMenuItem('restoredraft', {
-        text: 'Restore last draft',
-        icon: 'restore-draft',
-        onAction: function () {
-          restoreLastDraft(editor);
-        },
-        onSetup: makeSetupHandler(editor)
+      editor.ui.registry.addMenuItem('emoticons', {
+        text: 'Emoticons...',
+        icon: 'emoji',
+        onAction: onAction
       });
     };
 
     function Plugin () {
-      global$4.add('autosave', function (editor) {
-        setup(editor);
+      global$3.add('emoticons', function (editor, pluginUrl) {
+        var databaseUrl = getEmoticonDatabaseUrl(editor, pluginUrl);
+        var databaseId = getEmoticonDatabaseId(editor);
+        var database = initDatabase(editor, databaseUrl, databaseId);
+        register$1(editor, database);
         register(editor);
-        editor.on('init', function () {
-          if (shouldRestoreWhenEmpty(editor) && editor.dom.isEmpty(editor.getBody())) {
-            restoreDraft(editor);
-          }
-        });
-        return get(editor);
+        init(editor, database);
+        setup(editor);
       });
     }
 
@@ -54367,643 +55096,6 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$3 = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var eq = function (t) {
-      return function (a) {
-        return t === a;
-      };
-    };
-    var isNull = eq(null);
-
-    var noop = function () {
-    };
-    var constant = function (value) {
-      return function () {
-        return value;
-      };
-    };
-    var identity = function (x) {
-      return x;
-    };
-    var never = constant(false);
-    var always = constant(true);
-
-    var none = function () {
-      return NONE;
-    };
-    var NONE = function () {
-      var call = function (thunk) {
-        return thunk();
-      };
-      var id = identity;
-      var me = {
-        fold: function (n, _s) {
-          return n();
-        },
-        isSome: never,
-        isNone: always,
-        getOr: id,
-        getOrThunk: call,
-        getOrDie: function (msg) {
-          throw new Error(msg || 'error: getOrDie called on none.');
-        },
-        getOrNull: constant(null),
-        getOrUndefined: constant(undefined),
-        or: id,
-        orThunk: call,
-        map: none,
-        each: noop,
-        bind: none,
-        exists: never,
-        forall: always,
-        filter: function () {
-          return none();
-        },
-        toArray: function () {
-          return [];
-        },
-        toString: constant('none()')
-      };
-      return me;
-    }();
-    var some = function (a) {
-      var constant_a = constant(a);
-      var self = function () {
-        return me;
-      };
-      var bind = function (f) {
-        return f(a);
-      };
-      var me = {
-        fold: function (n, s) {
-          return s(a);
-        },
-        isSome: always,
-        isNone: never,
-        getOr: constant_a,
-        getOrThunk: constant_a,
-        getOrDie: constant_a,
-        getOrNull: constant_a,
-        getOrUndefined: constant_a,
-        or: self,
-        orThunk: self,
-        map: function (f) {
-          return some(f(a));
-        },
-        each: function (f) {
-          f(a);
-        },
-        bind: bind,
-        exists: bind,
-        forall: bind,
-        filter: function (f) {
-          return f(a) ? me : NONE;
-        },
-        toArray: function () {
-          return [a];
-        },
-        toString: function () {
-          return 'some(' + a + ')';
-        }
-      };
-      return me;
-    };
-    var from = function (value) {
-      return value === null || value === undefined ? NONE : some(value);
-    };
-    var Optional = {
-      some: some,
-      none: none,
-      from: from
-    };
-
-    var exists = function (xs, pred) {
-      for (var i = 0, len = xs.length; i < len; i++) {
-        var x = xs[i];
-        if (pred(x, i)) {
-          return true;
-        }
-      }
-      return false;
-    };
-    var map$1 = function (xs, f) {
-      var len = xs.length;
-      var r = new Array(len);
-      for (var i = 0; i < len; i++) {
-        var x = xs[i];
-        r[i] = f(x, i);
-      }
-      return r;
-    };
-    var each$1 = function (xs, f) {
-      for (var i = 0, len = xs.length; i < len; i++) {
-        var x = xs[i];
-        f(x, i);
-      }
-    };
-
-    var Cell = function (initial) {
-      var value = initial;
-      var get = function () {
-        return value;
-      };
-      var set = function (v) {
-        value = v;
-      };
-      return {
-        get: get,
-        set: set
-      };
-    };
-
-    var last = function (fn, rate) {
-      var timer = null;
-      var cancel = function () {
-        if (!isNull(timer)) {
-          clearTimeout(timer);
-          timer = null;
-        }
-      };
-      var throttle = function () {
-        var args = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-          args[_i] = arguments[_i];
-        }
-        cancel();
-        timer = setTimeout(function () {
-          timer = null;
-          fn.apply(null, args);
-        }, rate);
-      };
-      return {
-        cancel: cancel,
-        throttle: throttle
-      };
-    };
-
-    var insertEmoticon = function (editor, ch) {
-      editor.insertContent(ch);
-    };
-
-    var __assign = function () {
-      __assign = Object.assign || function __assign(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-          s = arguments[i];
-          for (var p in s)
-            if (Object.prototype.hasOwnProperty.call(s, p))
-              t[p] = s[p];
-        }
-        return t;
-      };
-      return __assign.apply(this, arguments);
-    };
-
-    var keys = Object.keys;
-    var hasOwnProperty = Object.hasOwnProperty;
-    var each = function (obj, f) {
-      var props = keys(obj);
-      for (var k = 0, len = props.length; k < len; k++) {
-        var i = props[k];
-        var x = obj[i];
-        f(x, i);
-      }
-    };
-    var map = function (obj, f) {
-      return tupleMap(obj, function (x, i) {
-        return {
-          k: i,
-          v: f(x, i)
-        };
-      });
-    };
-    var tupleMap = function (obj, f) {
-      var r = {};
-      each(obj, function (x, i) {
-        var tuple = f(x, i);
-        r[tuple.k] = tuple.v;
-      });
-      return r;
-    };
-    var has = function (obj, key) {
-      return hasOwnProperty.call(obj, key);
-    };
-
-    var shallow = function (old, nu) {
-      return nu;
-    };
-    var baseMerge = function (merger) {
-      return function () {
-        var objects = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-          objects[_i] = arguments[_i];
-        }
-        if (objects.length === 0) {
-          throw new Error('Can\'t merge zero objects');
-        }
-        var ret = {};
-        for (var j = 0; j < objects.length; j++) {
-          var curObject = objects[j];
-          for (var key in curObject) {
-            if (has(curObject, key)) {
-              ret[key] = merger(ret[key], curObject[key]);
-            }
-          }
-        }
-        return ret;
-      };
-    };
-    var merge = baseMerge(shallow);
-
-    var singleton = function (doRevoke) {
-      var subject = Cell(Optional.none());
-      var revoke = function () {
-        return subject.get().each(doRevoke);
-      };
-      var clear = function () {
-        revoke();
-        subject.set(Optional.none());
-      };
-      var isSet = function () {
-        return subject.get().isSome();
-      };
-      var get = function () {
-        return subject.get();
-      };
-      var set = function (s) {
-        revoke();
-        subject.set(Optional.some(s));
-      };
-      return {
-        clear: clear,
-        isSet: isSet,
-        get: get,
-        set: set
-      };
-    };
-    var value = function () {
-      var subject = singleton(noop);
-      var on = function (f) {
-        return subject.get().each(f);
-      };
-      return __assign(__assign({}, subject), { on: on });
-    };
-
-    var checkRange = function (str, substr, start) {
-      return substr === '' || str.length >= substr.length && str.substr(start, start + substr.length) === substr;
-    };
-    var contains = function (str, substr) {
-      return str.indexOf(substr) !== -1;
-    };
-    var startsWith = function (str, prefix) {
-      return checkRange(str, prefix, 0);
-    };
-
-    var global$2 = tinymce.util.Tools.resolve('tinymce.Resource');
-
-    var global$1 = tinymce.util.Tools.resolve('tinymce.util.Delay');
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.Promise');
-
-    var DEFAULT_ID = 'tinymce.plugins.emoticons';
-    var getEmoticonDatabase = function (editor) {
-      return editor.getParam('emoticons_database', 'emojis', 'string');
-    };
-    var getEmoticonDatabaseUrl = function (editor, pluginUrl) {
-      var database = getEmoticonDatabase(editor);
-      return editor.getParam('emoticons_database_url', pluginUrl + '/js/' + database + editor.suffix + '.js', 'string');
-    };
-    var getEmoticonDatabaseId = function (editor) {
-      return editor.getParam('emoticons_database_id', DEFAULT_ID, 'string');
-    };
-    var getAppendedEmoticons = function (editor) {
-      return editor.getParam('emoticons_append', {}, 'object');
-    };
-    var getEmotionsImageUrl = function (editor) {
-      return editor.getParam('emoticons_images_url', 'https://twemoji.maxcdn.com/v/13.0.1/72x72/', 'string');
-    };
-
-    var ALL_CATEGORY = 'All';
-    var categoryNameMap = {
-      symbols: 'Symbols',
-      people: 'People',
-      animals_and_nature: 'Animals and Nature',
-      food_and_drink: 'Food and Drink',
-      activity: 'Activity',
-      travel_and_places: 'Travel and Places',
-      objects: 'Objects',
-      flags: 'Flags',
-      user: 'User Defined'
-    };
-    var translateCategory = function (categories, name) {
-      return has(categories, name) ? categories[name] : name;
-    };
-    var getUserDefinedEmoticons = function (editor) {
-      var userDefinedEmoticons = getAppendedEmoticons(editor);
-      return map(userDefinedEmoticons, function (value) {
-        return __assign({
-          keywords: [],
-          category: 'user'
-        }, value);
-      });
-    };
-    var initDatabase = function (editor, databaseUrl, databaseId) {
-      var categories = value();
-      var all = value();
-      var emojiImagesUrl = getEmotionsImageUrl(editor);
-      var getEmoji = function (lib) {
-        if (startsWith(lib.char, '<img')) {
-          return lib.char.replace(/src="([^"]+)"/, function (match, url) {
-            return 'src="' + emojiImagesUrl + url + '"';
-          });
-        } else {
-          return lib.char;
-        }
-      };
-      var processEmojis = function (emojis) {
-        var cats = {};
-        var everything = [];
-        each(emojis, function (lib, title) {
-          var entry = {
-            title: title,
-            keywords: lib.keywords,
-            char: getEmoji(lib),
-            category: translateCategory(categoryNameMap, lib.category)
-          };
-          var current = cats[entry.category] !== undefined ? cats[entry.category] : [];
-          cats[entry.category] = current.concat([entry]);
-          everything.push(entry);
-        });
-        categories.set(cats);
-        all.set(everything);
-      };
-      editor.on('init', function () {
-        global$2.load(databaseId, databaseUrl).then(function (emojis) {
-          var userEmojis = getUserDefinedEmoticons(editor);
-          processEmojis(merge(emojis, userEmojis));
-        }, function (err) {
-          console.log('Failed to load emoticons: ' + err);
-          categories.set({});
-          all.set([]);
-        });
-      });
-      var listCategory = function (category) {
-        if (category === ALL_CATEGORY) {
-          return listAll();
-        }
-        return categories.get().bind(function (cats) {
-          return Optional.from(cats[category]);
-        }).getOr([]);
-      };
-      var listAll = function () {
-        return all.get().getOr([]);
-      };
-      var listCategories = function () {
-        return [ALL_CATEGORY].concat(keys(categories.get().getOr({})));
-      };
-      var waitForLoad = function () {
-        if (hasLoaded()) {
-          return global.resolve(true);
-        } else {
-          return new global(function (resolve, reject) {
-            var numRetries = 15;
-            var interval = global$1.setInterval(function () {
-              if (hasLoaded()) {
-                global$1.clearInterval(interval);
-                resolve(true);
-              } else {
-                numRetries--;
-                if (numRetries < 0) {
-                  console.log('Could not load emojis from url: ' + databaseUrl);
-                  global$1.clearInterval(interval);
-                  reject(false);
-                }
-              }
-            }, 100);
-          });
-        }
-      };
-      var hasLoaded = function () {
-        return categories.isSet() && all.isSet();
-      };
-      return {
-        listCategories: listCategories,
-        hasLoaded: hasLoaded,
-        waitForLoad: waitForLoad,
-        listAll: listAll,
-        listCategory: listCategory
-      };
-    };
-
-    var emojiMatches = function (emoji, lowerCasePattern) {
-      return contains(emoji.title.toLowerCase(), lowerCasePattern) || exists(emoji.keywords, function (k) {
-        return contains(k.toLowerCase(), lowerCasePattern);
-      });
-    };
-    var emojisFrom = function (list, pattern, maxResults) {
-      var matches = [];
-      var lowerCasePattern = pattern.toLowerCase();
-      var reachedLimit = maxResults.fold(function () {
-        return never;
-      }, function (max) {
-        return function (size) {
-          return size >= max;
-        };
-      });
-      for (var i = 0; i < list.length; i++) {
-        if (pattern.length === 0 || emojiMatches(list[i], lowerCasePattern)) {
-          matches.push({
-            value: list[i].char,
-            text: list[i].title,
-            icon: list[i].char
-          });
-          if (reachedLimit(matches.length)) {
-            break;
-          }
-        }
-      }
-      return matches;
-    };
-
-    var patternName = 'pattern';
-    var open = function (editor, database) {
-      var initialState = {
-        pattern: '',
-        results: emojisFrom(database.listAll(), '', Optional.some(300))
-      };
-      var currentTab = Cell(ALL_CATEGORY);
-      var scan = function (dialogApi) {
-        var dialogData = dialogApi.getData();
-        var category = currentTab.get();
-        var candidates = database.listCategory(category);
-        var results = emojisFrom(candidates, dialogData[patternName], category === ALL_CATEGORY ? Optional.some(300) : Optional.none());
-        dialogApi.setData({ results: results });
-      };
-      var updateFilter = last(function (dialogApi) {
-        scan(dialogApi);
-      }, 200);
-      var searchField = {
-        label: 'Search',
-        type: 'input',
-        name: patternName
-      };
-      var resultsField = {
-        type: 'collection',
-        name: 'results'
-      };
-      var getInitialState = function () {
-        var body = {
-          type: 'tabpanel',
-          tabs: map$1(database.listCategories(), function (cat) {
-            return {
-              title: cat,
-              name: cat,
-              items: [
-                searchField,
-                resultsField
-              ]
-            };
-          })
-        };
-        return {
-          title: 'Emoticons',
-          size: 'normal',
-          body: body,
-          initialData: initialState,
-          onTabChange: function (dialogApi, details) {
-            currentTab.set(details.newTabName);
-            updateFilter.throttle(dialogApi);
-          },
-          onChange: updateFilter.throttle,
-          onAction: function (dialogApi, actionData) {
-            if (actionData.name === 'results') {
-              insertEmoticon(editor, actionData.value);
-              dialogApi.close();
-            }
-          },
-          buttons: [{
-              type: 'cancel',
-              text: 'Close',
-              primary: true
-            }]
-        };
-      };
-      var dialogApi = editor.windowManager.open(getInitialState());
-      dialogApi.focus(patternName);
-      if (!database.hasLoaded()) {
-        dialogApi.block('Loading emoticons...');
-        database.waitForLoad().then(function () {
-          dialogApi.redial(getInitialState());
-          updateFilter.throttle(dialogApi);
-          dialogApi.focus(patternName);
-          dialogApi.unblock();
-        }).catch(function (_err) {
-          dialogApi.redial({
-            title: 'Emoticons',
-            body: {
-              type: 'panel',
-              items: [{
-                  type: 'alertbanner',
-                  level: 'error',
-                  icon: 'warning',
-                  text: '<p>Could not load emoticons</p>'
-                }]
-            },
-            buttons: [{
-                type: 'cancel',
-                text: 'Close',
-                primary: true
-              }],
-            initialData: {
-              pattern: '',
-              results: []
-            }
-          });
-          dialogApi.focus(patternName);
-          dialogApi.unblock();
-        });
-      }
-    };
-
-    var register$1 = function (editor, database) {
-      editor.addCommand('mceEmoticons', function () {
-        return open(editor, database);
-      });
-    };
-
-    var setup = function (editor) {
-      editor.on('PreInit', function () {
-        editor.parser.addAttributeFilter('data-emoticon', function (nodes) {
-          each$1(nodes, function (node) {
-            node.attr('data-mce-resize', 'false');
-            node.attr('data-mce-placeholder', '1');
-          });
-        });
-      });
-    };
-
-    var init = function (editor, database) {
-      editor.ui.registry.addAutocompleter('emoticons', {
-        ch: ':',
-        columns: 'auto',
-        minChars: 2,
-        fetch: function (pattern, maxResults) {
-          return database.waitForLoad().then(function () {
-            var candidates = database.listAll();
-            return emojisFrom(candidates, pattern, Optional.some(maxResults));
-          });
-        },
-        onAction: function (autocompleteApi, rng, value) {
-          editor.selection.setRng(rng);
-          editor.insertContent(value);
-          autocompleteApi.hide();
-        }
-      });
-    };
-
-    var register = function (editor) {
-      var onAction = function () {
-        return editor.execCommand('mceEmoticons');
-      };
-      editor.ui.registry.addButton('emoticons', {
-        tooltip: 'Emoticons',
-        icon: 'emoji',
-        onAction: onAction
-      });
-      editor.ui.registry.addMenuItem('emoticons', {
-        text: 'Emoticons...',
-        icon: 'emoji',
-        onAction: onAction
-      });
-    };
-
-    function Plugin () {
-      global$3.add('emoticons', function (editor, pluginUrl) {
-        var databaseUrl = getEmoticonDatabaseUrl(editor, pluginUrl);
-        var databaseId = getEmoticonDatabaseId(editor);
-        var database = initDatabase(editor, databaseUrl, databaseId);
-        register$1(editor, database);
-        register(editor);
-        init(editor, database);
-        setup(editor);
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
     var global$6 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     var __assign = function () {
@@ -56671,98 +56763,6 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var setContent = function (editor, html) {
-      editor.focus();
-      editor.undoManager.transact(function () {
-        editor.setContent(html);
-      });
-      editor.selection.setCursorLocation();
-      editor.nodeChanged();
-    };
-    var getContent = function (editor) {
-      return editor.getContent({ source_view: true });
-    };
-
-    var open = function (editor) {
-      var editorContent = getContent(editor);
-      editor.windowManager.open({
-        title: 'Source Code',
-        size: 'large',
-        body: {
-          type: 'panel',
-          items: [{
-              type: 'textarea',
-              name: 'code'
-            }]
-        },
-        buttons: [
-          {
-            type: 'cancel',
-            name: 'cancel',
-            text: 'Cancel'
-          },
-          {
-            type: 'submit',
-            name: 'save',
-            text: 'Save',
-            primary: true
-          }
-        ],
-        initialData: { code: editorContent },
-        onSubmit: function (api) {
-          setContent(editor, api.getData().code);
-          api.close();
-        }
-      });
-    };
-
-    var register$1 = function (editor) {
-      editor.addCommand('mceCodeEditor', function () {
-        open(editor);
-      });
-    };
-
-    var register = function (editor) {
-      var onAction = function () {
-        return editor.execCommand('mceCodeEditor');
-      };
-      editor.ui.registry.addButton('code', {
-        icon: 'sourcecode',
-        tooltip: 'Source code',
-        onAction: onAction
-      });
-      editor.ui.registry.addMenuItem('code', {
-        icon: 'sourcecode',
-        text: 'Source code',
-        onAction: onAction
-      });
-    };
-
-    function Plugin () {
-      global.add('code', function (editor) {
-        register$1(editor);
-        register(editor);
-        return {};
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
     var Cell = function (initial) {
       var value = initial;
       var get = function () {
@@ -58295,189 +58295,6 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var getDateFormat = function (editor) {
-      return editor.getParam('insertdatetime_dateformat', editor.translate('%Y-%m-%d'));
-    };
-    var getTimeFormat = function (editor) {
-      return editor.getParam('insertdatetime_timeformat', editor.translate('%H:%M:%S'));
-    };
-    var getFormats = function (editor) {
-      return editor.getParam('insertdatetime_formats', [
-        '%H:%M:%S',
-        '%Y-%m-%d',
-        '%I:%M:%S %p',
-        '%D'
-      ]);
-    };
-    var getDefaultDateTime = function (editor) {
-      var formats = getFormats(editor);
-      return formats.length > 0 ? formats[0] : getTimeFormat(editor);
-    };
-    var shouldInsertTimeElement = function (editor) {
-      return editor.getParam('insertdatetime_element', false);
-    };
-
-    var daysShort = 'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ');
-    var daysLong = 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday Sunday'.split(' ');
-    var monthsShort = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
-    var monthsLong = 'January February March April May June July August September October November December'.split(' ');
-    var addZeros = function (value, len) {
-      value = '' + value;
-      if (value.length < len) {
-        for (var i = 0; i < len - value.length; i++) {
-          value = '0' + value;
-        }
-      }
-      return value;
-    };
-    var getDateTime = function (editor, fmt, date) {
-      if (date === void 0) {
-        date = new Date();
-      }
-      fmt = fmt.replace('%D', '%m/%d/%Y');
-      fmt = fmt.replace('%r', '%I:%M:%S %p');
-      fmt = fmt.replace('%Y', '' + date.getFullYear());
-      fmt = fmt.replace('%y', '' + date.getYear());
-      fmt = fmt.replace('%m', addZeros(date.getMonth() + 1, 2));
-      fmt = fmt.replace('%d', addZeros(date.getDate(), 2));
-      fmt = fmt.replace('%H', '' + addZeros(date.getHours(), 2));
-      fmt = fmt.replace('%M', '' + addZeros(date.getMinutes(), 2));
-      fmt = fmt.replace('%S', '' + addZeros(date.getSeconds(), 2));
-      fmt = fmt.replace('%I', '' + ((date.getHours() + 11) % 12 + 1));
-      fmt = fmt.replace('%p', '' + (date.getHours() < 12 ? 'AM' : 'PM'));
-      fmt = fmt.replace('%B', '' + editor.translate(monthsLong[date.getMonth()]));
-      fmt = fmt.replace('%b', '' + editor.translate(monthsShort[date.getMonth()]));
-      fmt = fmt.replace('%A', '' + editor.translate(daysLong[date.getDay()]));
-      fmt = fmt.replace('%a', '' + editor.translate(daysShort[date.getDay()]));
-      fmt = fmt.replace('%%', '%');
-      return fmt;
-    };
-    var updateElement = function (editor, timeElm, computerTime, userTime) {
-      var newTimeElm = editor.dom.create('time', { datetime: computerTime }, userTime);
-      timeElm.parentNode.insertBefore(newTimeElm, timeElm);
-      editor.dom.remove(timeElm);
-      editor.selection.select(newTimeElm, true);
-      editor.selection.collapse(false);
-    };
-    var insertDateTime = function (editor, format) {
-      if (shouldInsertTimeElement(editor)) {
-        var userTime = getDateTime(editor, format);
-        var computerTime = void 0;
-        if (/%[HMSIp]/.test(format)) {
-          computerTime = getDateTime(editor, '%Y-%m-%dT%H:%M');
-        } else {
-          computerTime = getDateTime(editor, '%Y-%m-%d');
-        }
-        var timeElm = editor.dom.getParent(editor.selection.getStart(), 'time');
-        if (timeElm) {
-          updateElement(editor, timeElm, computerTime, userTime);
-        } else {
-          editor.insertContent('<time datetime="' + computerTime + '">' + userTime + '</time>');
-        }
-      } else {
-        editor.insertContent(getDateTime(editor, format));
-      }
-    };
-
-    var register$1 = function (editor) {
-      editor.addCommand('mceInsertDate', function (_ui, value) {
-        insertDateTime(editor, value !== null && value !== void 0 ? value : getDateFormat(editor));
-      });
-      editor.addCommand('mceInsertTime', function (_ui, value) {
-        insertDateTime(editor, value !== null && value !== void 0 ? value : getTimeFormat(editor));
-      });
-    };
-
-    var Cell = function (initial) {
-      var value = initial;
-      var get = function () {
-        return value;
-      };
-      var set = function (v) {
-        value = v;
-      };
-      return {
-        get: get,
-        set: set
-      };
-    };
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var register = function (editor) {
-      var formats = getFormats(editor);
-      var defaultFormat = Cell(getDefaultDateTime(editor));
-      var insertDateTime = function (format) {
-        return editor.execCommand('mceInsertDate', false, format);
-      };
-      editor.ui.registry.addSplitButton('insertdatetime', {
-        icon: 'insert-time',
-        tooltip: 'Insert date/time',
-        select: function (value) {
-          return value === defaultFormat.get();
-        },
-        fetch: function (done) {
-          done(global.map(formats, function (format) {
-            return {
-              type: 'choiceitem',
-              text: getDateTime(editor, format),
-              value: format
-            };
-          }));
-        },
-        onAction: function (_api) {
-          insertDateTime(defaultFormat.get());
-        },
-        onItemAction: function (_api, value) {
-          defaultFormat.set(value);
-          insertDateTime(value);
-        }
-      });
-      var makeMenuItemHandler = function (format) {
-        return function () {
-          defaultFormat.set(format);
-          insertDateTime(format);
-        };
-      };
-      editor.ui.registry.addNestedMenuItem('insertdatetime', {
-        icon: 'insert-time',
-        text: 'Date/time',
-        getSubmenuItems: function () {
-          return global.map(formats, function (format) {
-            return {
-              type: 'menuitem',
-              text: getDateTime(editor, format),
-              onAction: makeMenuItemHandler(format)
-            };
-          });
-        }
-      });
-    };
-
-    function Plugin () {
-      global$1.add('insertdatetime', function (editor) {
-        register$1(editor);
-        register(editor);
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
     var global$4 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     var typeOf = function (x) {
@@ -58803,6 +58620,389 @@ tinymce.IconManager.add('default', {
       global$4.add('importcss', function (editor) {
         setup(editor);
         return get(editor);
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var getDateFormat = function (editor) {
+      return editor.getParam('insertdatetime_dateformat', editor.translate('%Y-%m-%d'));
+    };
+    var getTimeFormat = function (editor) {
+      return editor.getParam('insertdatetime_timeformat', editor.translate('%H:%M:%S'));
+    };
+    var getFormats = function (editor) {
+      return editor.getParam('insertdatetime_formats', [
+        '%H:%M:%S',
+        '%Y-%m-%d',
+        '%I:%M:%S %p',
+        '%D'
+      ]);
+    };
+    var getDefaultDateTime = function (editor) {
+      var formats = getFormats(editor);
+      return formats.length > 0 ? formats[0] : getTimeFormat(editor);
+    };
+    var shouldInsertTimeElement = function (editor) {
+      return editor.getParam('insertdatetime_element', false);
+    };
+
+    var daysShort = 'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ');
+    var daysLong = 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday Sunday'.split(' ');
+    var monthsShort = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+    var monthsLong = 'January February March April May June July August September October November December'.split(' ');
+    var addZeros = function (value, len) {
+      value = '' + value;
+      if (value.length < len) {
+        for (var i = 0; i < len - value.length; i++) {
+          value = '0' + value;
+        }
+      }
+      return value;
+    };
+    var getDateTime = function (editor, fmt, date) {
+      if (date === void 0) {
+        date = new Date();
+      }
+      fmt = fmt.replace('%D', '%m/%d/%Y');
+      fmt = fmt.replace('%r', '%I:%M:%S %p');
+      fmt = fmt.replace('%Y', '' + date.getFullYear());
+      fmt = fmt.replace('%y', '' + date.getYear());
+      fmt = fmt.replace('%m', addZeros(date.getMonth() + 1, 2));
+      fmt = fmt.replace('%d', addZeros(date.getDate(), 2));
+      fmt = fmt.replace('%H', '' + addZeros(date.getHours(), 2));
+      fmt = fmt.replace('%M', '' + addZeros(date.getMinutes(), 2));
+      fmt = fmt.replace('%S', '' + addZeros(date.getSeconds(), 2));
+      fmt = fmt.replace('%I', '' + ((date.getHours() + 11) % 12 + 1));
+      fmt = fmt.replace('%p', '' + (date.getHours() < 12 ? 'AM' : 'PM'));
+      fmt = fmt.replace('%B', '' + editor.translate(monthsLong[date.getMonth()]));
+      fmt = fmt.replace('%b', '' + editor.translate(monthsShort[date.getMonth()]));
+      fmt = fmt.replace('%A', '' + editor.translate(daysLong[date.getDay()]));
+      fmt = fmt.replace('%a', '' + editor.translate(daysShort[date.getDay()]));
+      fmt = fmt.replace('%%', '%');
+      return fmt;
+    };
+    var updateElement = function (editor, timeElm, computerTime, userTime) {
+      var newTimeElm = editor.dom.create('time', { datetime: computerTime }, userTime);
+      timeElm.parentNode.insertBefore(newTimeElm, timeElm);
+      editor.dom.remove(timeElm);
+      editor.selection.select(newTimeElm, true);
+      editor.selection.collapse(false);
+    };
+    var insertDateTime = function (editor, format) {
+      if (shouldInsertTimeElement(editor)) {
+        var userTime = getDateTime(editor, format);
+        var computerTime = void 0;
+        if (/%[HMSIp]/.test(format)) {
+          computerTime = getDateTime(editor, '%Y-%m-%dT%H:%M');
+        } else {
+          computerTime = getDateTime(editor, '%Y-%m-%d');
+        }
+        var timeElm = editor.dom.getParent(editor.selection.getStart(), 'time');
+        if (timeElm) {
+          updateElement(editor, timeElm, computerTime, userTime);
+        } else {
+          editor.insertContent('<time datetime="' + computerTime + '">' + userTime + '</time>');
+        }
+      } else {
+        editor.insertContent(getDateTime(editor, format));
+      }
+    };
+
+    var register$1 = function (editor) {
+      editor.addCommand('mceInsertDate', function (_ui, value) {
+        insertDateTime(editor, value !== null && value !== void 0 ? value : getDateFormat(editor));
+      });
+      editor.addCommand('mceInsertTime', function (_ui, value) {
+        insertDateTime(editor, value !== null && value !== void 0 ? value : getTimeFormat(editor));
+      });
+    };
+
+    var Cell = function (initial) {
+      var value = initial;
+      var get = function () {
+        return value;
+      };
+      var set = function (v) {
+        value = v;
+      };
+      return {
+        get: get,
+        set: set
+      };
+    };
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var register = function (editor) {
+      var formats = getFormats(editor);
+      var defaultFormat = Cell(getDefaultDateTime(editor));
+      var insertDateTime = function (format) {
+        return editor.execCommand('mceInsertDate', false, format);
+      };
+      editor.ui.registry.addSplitButton('insertdatetime', {
+        icon: 'insert-time',
+        tooltip: 'Insert date/time',
+        select: function (value) {
+          return value === defaultFormat.get();
+        },
+        fetch: function (done) {
+          done(global.map(formats, function (format) {
+            return {
+              type: 'choiceitem',
+              text: getDateTime(editor, format),
+              value: format
+            };
+          }));
+        },
+        onAction: function (_api) {
+          insertDateTime(defaultFormat.get());
+        },
+        onItemAction: function (_api, value) {
+          defaultFormat.set(value);
+          insertDateTime(value);
+        }
+      });
+      var makeMenuItemHandler = function (format) {
+        return function () {
+          defaultFormat.set(format);
+          insertDateTime(format);
+        };
+      };
+      editor.ui.registry.addNestedMenuItem('insertdatetime', {
+        icon: 'insert-time',
+        text: 'Date/time',
+        getSubmenuItems: function () {
+          return global.map(formats, function (format) {
+            return {
+              type: 'menuitem',
+              text: getDateTime(editor, format),
+              onAction: makeMenuItemHandler(format)
+            };
+          });
+        }
+      });
+    };
+
+    function Plugin () {
+      global$1.add('insertdatetime', function (editor) {
+        register$1(editor);
+        register(editor);
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var getFontSizeFormats = function (editor) {
+      return editor.getParam('fontsize_formats');
+    };
+    var setFontSizeFormats = function (editor, fontsize_formats) {
+      editor.settings.fontsize_formats = fontsize_formats;
+    };
+    var getFontFormats = function (editor) {
+      return editor.getParam('font_formats');
+    };
+    var setFontFormats = function (editor, font_formats) {
+      editor.settings.font_formats = font_formats;
+    };
+    var getFontSizeStyleValues = function (editor) {
+      return editor.getParam('font_size_style_values', 'xx-small,x-small,small,medium,large,x-large,xx-large');
+    };
+    var setInlineStyles = function (editor, inline_styles) {
+      editor.settings.inline_styles = inline_styles;
+    };
+
+    var overrideFormats = function (editor) {
+      var alignElements = 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li,table', fontSizes = global.explode(getFontSizeStyleValues(editor)), schema = editor.schema;
+      editor.formatter.register({
+        alignleft: {
+          selector: alignElements,
+          attributes: { align: 'left' }
+        },
+        aligncenter: {
+          selector: alignElements,
+          attributes: { align: 'center' }
+        },
+        alignright: {
+          selector: alignElements,
+          attributes: { align: 'right' }
+        },
+        alignjustify: {
+          selector: alignElements,
+          attributes: { align: 'justify' }
+        },
+        bold: [
+          {
+            inline: 'b',
+            remove: 'all',
+            preserve_attributes: [
+              'class',
+              'style'
+            ]
+          },
+          {
+            inline: 'strong',
+            remove: 'all',
+            preserve_attributes: [
+              'class',
+              'style'
+            ]
+          },
+          {
+            inline: 'span',
+            styles: { fontWeight: 'bold' }
+          }
+        ],
+        italic: [
+          {
+            inline: 'i',
+            remove: 'all',
+            preserve_attributes: [
+              'class',
+              'style'
+            ]
+          },
+          {
+            inline: 'em',
+            remove: 'all',
+            preserve_attributes: [
+              'class',
+              'style'
+            ]
+          },
+          {
+            inline: 'span',
+            styles: { fontStyle: 'italic' }
+          }
+        ],
+        underline: [
+          {
+            inline: 'u',
+            remove: 'all',
+            preserve_attributes: [
+              'class',
+              'style'
+            ]
+          },
+          {
+            inline: 'span',
+            styles: { textDecoration: 'underline' },
+            exact: true
+          }
+        ],
+        strikethrough: [
+          {
+            inline: 'strike',
+            remove: 'all',
+            preserve_attributes: [
+              'class',
+              'style'
+            ]
+          },
+          {
+            inline: 'span',
+            styles: { textDecoration: 'line-through' },
+            exact: true
+          }
+        ],
+        fontname: {
+          inline: 'font',
+          toggle: false,
+          attributes: { face: '%value' }
+        },
+        fontsize: {
+          inline: 'font',
+          toggle: false,
+          attributes: {
+            size: function (vars) {
+              return String(global.inArray(fontSizes, vars.value) + 1);
+            }
+          }
+        },
+        forecolor: {
+          inline: 'font',
+          attributes: { color: '%value' },
+          links: true,
+          remove_similar: true,
+          clear_child_styles: true
+        },
+        hilitecolor: {
+          inline: 'font',
+          styles: { backgroundColor: '%value' },
+          links: true,
+          remove_similar: true,
+          clear_child_styles: true
+        }
+      });
+      global.each('b,i,u,strike'.split(','), function (name) {
+        schema.addValidElements(name + '[*]');
+      });
+      if (!schema.getElementRule('font')) {
+        schema.addValidElements('font[face|size|color|style]');
+      }
+      global.each(alignElements.split(','), function (name) {
+        var rule = schema.getElementRule(name);
+        if (rule) {
+          if (!rule.attributes.align) {
+            rule.attributes.align = {};
+            rule.attributesOrder.push('align');
+          }
+        }
+      });
+    };
+    var overrideSettings = function (editor) {
+      var defaultFontsizeFormats = '8pt=1 10pt=2 12pt=3 14pt=4 18pt=5 24pt=6 36pt=7';
+      var defaultFontsFormats = 'Andale Mono=andale mono,monospace;' + 'Arial=arial,helvetica,sans-serif;' + 'Arial Black=arial black,sans-serif;' + 'Book Antiqua=book antiqua,palatino,serif;' + 'Comic Sans MS=comic sans ms,sans-serif;' + 'Courier New=courier new,courier,monospace;' + 'Georgia=georgia,palatino,serif;' + 'Helvetica=helvetica,arial,sans-serif;' + 'Impact=impact,sans-serif;' + 'Symbol=symbol;' + 'Tahoma=tahoma,arial,helvetica,sans-serif;' + 'Terminal=terminal,monaco,monospace;' + 'Times New Roman=times new roman,times,serif;' + 'Trebuchet MS=trebuchet ms,geneva,sans-serif;' + 'Verdana=verdana,geneva,sans-serif;' + 'Webdings=webdings;' + 'Wingdings=wingdings,zapf dingbats';
+      setInlineStyles(editor, false);
+      if (!getFontSizeFormats(editor)) {
+        setFontSizeFormats(editor, defaultFontsizeFormats);
+      }
+      if (!getFontFormats(editor)) {
+        setFontFormats(editor, defaultFontsFormats);
+      }
+    };
+    var setup = function (editor) {
+      overrideSettings(editor);
+      editor.on('PreInit', function () {
+        return overrideFormats(editor);
+      });
+    };
+
+    function Plugin () {
+      global$1.add('legacyoutput', function (editor) {
+        setup(editor);
       });
     }
 
@@ -62429,6 +62629,1366 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
+    var global$9 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var __assign = function () {
+      __assign = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+          s = arguments[i];
+          for (var p in s)
+            if (Object.prototype.hasOwnProperty.call(s, p))
+              t[p] = s[p];
+        }
+        return t;
+      };
+      return __assign.apply(this, arguments);
+    };
+
+    var typeOf = function (x) {
+      var t = typeof x;
+      if (x === null) {
+        return 'null';
+      } else if (t === 'object' && (Array.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'Array')) {
+        return 'array';
+      } else if (t === 'object' && (String.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'String')) {
+        return 'string';
+      } else {
+        return t;
+      }
+    };
+    var isType = function (type) {
+      return function (value) {
+        return typeOf(value) === type;
+      };
+    };
+    var isString = isType('string');
+    var isObject = isType('object');
+    var isArray = isType('array');
+    var isNullable = function (a) {
+      return a === null || a === undefined;
+    };
+    var isNonNullable = function (a) {
+      return !isNullable(a);
+    };
+
+    var noop = function () {
+    };
+    var constant = function (value) {
+      return function () {
+        return value;
+      };
+    };
+    var identity = function (x) {
+      return x;
+    };
+    var never = constant(false);
+    var always = constant(true);
+
+    var none = function () {
+      return NONE;
+    };
+    var NONE = function () {
+      var call = function (thunk) {
+        return thunk();
+      };
+      var id = identity;
+      var me = {
+        fold: function (n, _s) {
+          return n();
+        },
+        isSome: never,
+        isNone: always,
+        getOr: id,
+        getOrThunk: call,
+        getOrDie: function (msg) {
+          throw new Error(msg || 'error: getOrDie called on none.');
+        },
+        getOrNull: constant(null),
+        getOrUndefined: constant(undefined),
+        or: id,
+        orThunk: call,
+        map: none,
+        each: noop,
+        bind: none,
+        exists: never,
+        forall: always,
+        filter: function () {
+          return none();
+        },
+        toArray: function () {
+          return [];
+        },
+        toString: constant('none()')
+      };
+      return me;
+    }();
+    var some = function (a) {
+      var constant_a = constant(a);
+      var self = function () {
+        return me;
+      };
+      var bind = function (f) {
+        return f(a);
+      };
+      var me = {
+        fold: function (n, s) {
+          return s(a);
+        },
+        isSome: always,
+        isNone: never,
+        getOr: constant_a,
+        getOrThunk: constant_a,
+        getOrDie: constant_a,
+        getOrNull: constant_a,
+        getOrUndefined: constant_a,
+        or: self,
+        orThunk: self,
+        map: function (f) {
+          return some(f(a));
+        },
+        each: function (f) {
+          f(a);
+        },
+        bind: bind,
+        exists: bind,
+        forall: bind,
+        filter: function (f) {
+          return f(a) ? me : NONE;
+        },
+        toArray: function () {
+          return [a];
+        },
+        toString: function () {
+          return 'some(' + a + ')';
+        }
+      };
+      return me;
+    };
+    var from = function (value) {
+      return value === null || value === undefined ? NONE : some(value);
+    };
+    var Optional = {
+      some: some,
+      none: none,
+      from: from
+    };
+
+    var nativePush = Array.prototype.push;
+    var each$1 = function (xs, f) {
+      for (var i = 0, len = xs.length; i < len; i++) {
+        var x = xs[i];
+        f(x, i);
+      }
+    };
+    var flatten = function (xs) {
+      var r = [];
+      for (var i = 0, len = xs.length; i < len; ++i) {
+        if (!isArray(xs[i])) {
+          throw new Error('Arr.flatten item ' + i + ' was not an array, input: ' + xs);
+        }
+        nativePush.apply(r, xs[i]);
+      }
+      return r;
+    };
+
+    var Cell = function (initial) {
+      var value = initial;
+      var get = function () {
+        return value;
+      };
+      var set = function (v) {
+        value = v;
+      };
+      return {
+        get: get,
+        set: set
+      };
+    };
+
+    var keys = Object.keys;
+    var hasOwnProperty = Object.hasOwnProperty;
+    var each = function (obj, f) {
+      var props = keys(obj);
+      for (var k = 0, len = props.length; k < len; k++) {
+        var i = props[k];
+        var x = obj[i];
+        f(x, i);
+      }
+    };
+    var get$1 = function (obj, key) {
+      return has(obj, key) ? Optional.from(obj[key]) : Optional.none();
+    };
+    var has = function (obj, key) {
+      return hasOwnProperty.call(obj, key);
+    };
+
+    var getScripts = function (editor) {
+      return editor.getParam('media_scripts');
+    };
+    var getAudioTemplateCallback = function (editor) {
+      return editor.getParam('audio_template_callback');
+    };
+    var getVideoTemplateCallback = function (editor) {
+      return editor.getParam('video_template_callback');
+    };
+    var hasLiveEmbeds = function (editor) {
+      return editor.getParam('media_live_embeds', true);
+    };
+    var shouldFilterHtml = function (editor) {
+      return editor.getParam('media_filter_html', true);
+    };
+    var getUrlResolver = function (editor) {
+      return editor.getParam('media_url_resolver');
+    };
+    var hasAltSource = function (editor) {
+      return editor.getParam('media_alt_source', true);
+    };
+    var hasPoster = function (editor) {
+      return editor.getParam('media_poster', true);
+    };
+    var hasDimensions = function (editor) {
+      return editor.getParam('media_dimensions', true);
+    };
+
+    var global$8 = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var global$7 = tinymce.util.Tools.resolve('tinymce.dom.DOMUtils');
+
+    var global$6 = tinymce.util.Tools.resolve('tinymce.html.SaxParser');
+
+    var getVideoScriptMatch = function (prefixes, src) {
+      if (prefixes) {
+        for (var i = 0; i < prefixes.length; i++) {
+          if (src.indexOf(prefixes[i].filter) !== -1) {
+            return prefixes[i];
+          }
+        }
+      }
+    };
+
+    var DOM$1 = global$7.DOM;
+    var trimPx = function (value) {
+      return value.replace(/px$/, '');
+    };
+    var getEphoxEmbedData = function (attrs) {
+      var style = attrs.map.style;
+      var styles = style ? DOM$1.parseStyle(style) : {};
+      return {
+        type: 'ephox-embed-iri',
+        source: attrs.map['data-ephox-embed-iri'],
+        altsource: '',
+        poster: '',
+        width: get$1(styles, 'max-width').map(trimPx).getOr(''),
+        height: get$1(styles, 'max-height').map(trimPx).getOr('')
+      };
+    };
+    var htmlToData = function (prefixes, html) {
+      var isEphoxEmbed = Cell(false);
+      var data = {};
+      global$6({
+        validate: false,
+        allow_conditional_comments: true,
+        start: function (name, attrs) {
+          if (isEphoxEmbed.get()) ; else if (has(attrs.map, 'data-ephox-embed-iri')) {
+            isEphoxEmbed.set(true);
+            data = getEphoxEmbedData(attrs);
+          } else {
+            if (!data.source && name === 'param') {
+              data.source = attrs.map.movie;
+            }
+            if (name === 'iframe' || name === 'object' || name === 'embed' || name === 'video' || name === 'audio') {
+              if (!data.type) {
+                data.type = name;
+              }
+              data = global$8.extend(attrs.map, data);
+            }
+            if (name === 'script') {
+              var videoScript = getVideoScriptMatch(prefixes, attrs.map.src);
+              if (!videoScript) {
+                return;
+              }
+              data = {
+                type: 'script',
+                source: attrs.map.src,
+                width: String(videoScript.width),
+                height: String(videoScript.height)
+              };
+            }
+            if (name === 'source') {
+              if (!data.source) {
+                data.source = attrs.map.src;
+              } else if (!data.altsource) {
+                data.altsource = attrs.map.src;
+              }
+            }
+            if (name === 'img' && !data.poster) {
+              data.poster = attrs.map.src;
+            }
+          }
+        }
+      }).parse(html);
+      data.source = data.source || data.src || data.data;
+      data.altsource = data.altsource || '';
+      data.poster = data.poster || '';
+      return data;
+    };
+
+    var guess = function (url) {
+      var mimes = {
+        mp3: 'audio/mpeg',
+        m4a: 'audio/x-m4a',
+        wav: 'audio/wav',
+        mp4: 'video/mp4',
+        webm: 'video/webm',
+        ogg: 'video/ogg',
+        swf: 'application/x-shockwave-flash'
+      };
+      var fileEnd = url.toLowerCase().split('.').pop();
+      var mime = mimes[fileEnd];
+      return mime ? mime : '';
+    };
+
+    var global$5 = tinymce.util.Tools.resolve('tinymce.html.Schema');
+
+    var global$4 = tinymce.util.Tools.resolve('tinymce.html.Writer');
+
+    var DOM = global$7.DOM;
+    var addPx = function (value) {
+      return /^[0-9.]+$/.test(value) ? value + 'px' : value;
+    };
+    var setAttributes = function (attrs, updatedAttrs) {
+      each(updatedAttrs, function (val, name) {
+        var value = '' + val;
+        if (attrs.map[name]) {
+          var i = attrs.length;
+          while (i--) {
+            var attr = attrs[i];
+            if (attr.name === name) {
+              if (value) {
+                attrs.map[name] = value;
+                attr.value = value;
+              } else {
+                delete attrs.map[name];
+                attrs.splice(i, 1);
+              }
+            }
+          }
+        } else if (value) {
+          attrs.push({
+            name: name,
+            value: value
+          });
+          attrs.map[name] = value;
+        }
+      });
+    };
+    var updateEphoxEmbed = function (data, attrs) {
+      var style = attrs.map.style;
+      var styleMap = style ? DOM.parseStyle(style) : {};
+      styleMap['max-width'] = addPx(data.width);
+      styleMap['max-height'] = addPx(data.height);
+      setAttributes(attrs, { style: DOM.serializeStyle(styleMap) });
+    };
+    var sources = [
+      'source',
+      'altsource'
+    ];
+    var updateHtml = function (html, data, updateAll) {
+      var writer = global$4();
+      var isEphoxEmbed = Cell(false);
+      var sourceCount = 0;
+      var hasImage;
+      global$6({
+        validate: false,
+        allow_conditional_comments: true,
+        comment: function (text) {
+          writer.comment(text);
+        },
+        cdata: function (text) {
+          writer.cdata(text);
+        },
+        text: function (text, raw) {
+          writer.text(text, raw);
+        },
+        start: function (name, attrs, empty) {
+          if (isEphoxEmbed.get()) ; else if (has(attrs.map, 'data-ephox-embed-iri')) {
+            isEphoxEmbed.set(true);
+            updateEphoxEmbed(data, attrs);
+          } else {
+            switch (name) {
+            case 'video':
+            case 'object':
+            case 'embed':
+            case 'img':
+            case 'iframe':
+              if (data.height !== undefined && data.width !== undefined) {
+                setAttributes(attrs, {
+                  width: data.width,
+                  height: data.height
+                });
+              }
+              break;
+            }
+            if (updateAll) {
+              switch (name) {
+              case 'video':
+                setAttributes(attrs, {
+                  poster: data.poster,
+                  src: ''
+                });
+                if (data.altsource) {
+                  setAttributes(attrs, { src: '' });
+                }
+                break;
+              case 'iframe':
+                setAttributes(attrs, { src: data.source });
+                break;
+              case 'source':
+                if (sourceCount < 2) {
+                  setAttributes(attrs, {
+                    src: data[sources[sourceCount]],
+                    type: data[sources[sourceCount] + 'mime']
+                  });
+                  if (!data[sources[sourceCount]]) {
+                    return;
+                  }
+                }
+                sourceCount++;
+                break;
+              case 'img':
+                if (!data.poster) {
+                  return;
+                }
+                hasImage = true;
+                break;
+              }
+            }
+          }
+          writer.start(name, attrs, empty);
+        },
+        end: function (name) {
+          if (!isEphoxEmbed.get()) {
+            if (name === 'video' && updateAll) {
+              for (var index = 0; index < 2; index++) {
+                if (data[sources[index]]) {
+                  var attrs = [];
+                  attrs.map = {};
+                  if (sourceCount <= index) {
+                    setAttributes(attrs, {
+                      src: data[sources[index]],
+                      type: data[sources[index] + 'mime']
+                    });
+                    writer.start('source', attrs, true);
+                  }
+                }
+              }
+            }
+            if (data.poster && name === 'object' && updateAll && !hasImage) {
+              var imgAttrs = [];
+              imgAttrs.map = {};
+              setAttributes(imgAttrs, {
+                src: data.poster,
+                width: data.width,
+                height: data.height
+              });
+              writer.start('img', imgAttrs, true);
+            }
+          }
+          writer.end(name);
+        }
+      }, global$5({})).parse(html);
+      return writer.getContent();
+    };
+
+    var urlPatterns = [
+      {
+        regex: /youtu\.be\/([\w\-_\?&=.]+)/i,
+        type: 'iframe',
+        w: 560,
+        h: 314,
+        url: 'www.youtube.com/embed/$1',
+        allowFullscreen: true
+      },
+      {
+        regex: /youtube\.com(.+)v=([^&]+)(&([a-z0-9&=\-_]+))?/i,
+        type: 'iframe',
+        w: 560,
+        h: 314,
+        url: 'www.youtube.com/embed/$2?$4',
+        allowFullscreen: true
+      },
+      {
+        regex: /youtube.com\/embed\/([a-z0-9\?&=\-_]+)/i,
+        type: 'iframe',
+        w: 560,
+        h: 314,
+        url: 'www.youtube.com/embed/$1',
+        allowFullscreen: true
+      },
+      {
+        regex: /vimeo\.com\/([0-9]+)/,
+        type: 'iframe',
+        w: 425,
+        h: 350,
+        url: 'player.vimeo.com/video/$1?title=0&byline=0&portrait=0&color=8dc7dc',
+        allowFullscreen: true
+      },
+      {
+        regex: /vimeo\.com\/(.*)\/([0-9]+)/,
+        type: 'iframe',
+        w: 425,
+        h: 350,
+        url: 'player.vimeo.com/video/$2?title=0&amp;byline=0',
+        allowFullscreen: true
+      },
+      {
+        regex: /maps\.google\.([a-z]{2,3})\/maps\/(.+)msid=(.+)/,
+        type: 'iframe',
+        w: 425,
+        h: 350,
+        url: 'maps.google.com/maps/ms?msid=$2&output=embed"',
+        allowFullscreen: false
+      },
+      {
+        regex: /dailymotion\.com\/video\/([^_]+)/,
+        type: 'iframe',
+        w: 480,
+        h: 270,
+        url: 'www.dailymotion.com/embed/video/$1',
+        allowFullscreen: true
+      },
+      {
+        regex: /dai\.ly\/([^_]+)/,
+        type: 'iframe',
+        w: 480,
+        h: 270,
+        url: 'www.dailymotion.com/embed/video/$1',
+        allowFullscreen: true
+      }
+    ];
+    var getProtocol = function (url) {
+      var protocolMatches = url.match(/^(https?:\/\/|www\.)(.+)$/i);
+      if (protocolMatches && protocolMatches.length > 1) {
+        return protocolMatches[1] === 'www.' ? 'https://' : protocolMatches[1];
+      } else {
+        return 'https://';
+      }
+    };
+    var getUrl = function (pattern, url) {
+      var protocol = getProtocol(url);
+      var match = pattern.regex.exec(url);
+      var newUrl = protocol + pattern.url;
+      var _loop_1 = function (i) {
+        newUrl = newUrl.replace('$' + i, function () {
+          return match[i] ? match[i] : '';
+        });
+      };
+      for (var i = 0; i < match.length; i++) {
+        _loop_1(i);
+      }
+      return newUrl.replace(/\?$/, '');
+    };
+    var matchPattern = function (url) {
+      var patterns = urlPatterns.filter(function (pattern) {
+        return pattern.regex.test(url);
+      });
+      if (patterns.length > 0) {
+        return global$8.extend({}, patterns[0], { url: getUrl(patterns[0], url) });
+      } else {
+        return null;
+      }
+    };
+
+    var getIframeHtml = function (data) {
+      var allowFullscreen = data.allowfullscreen ? ' allowFullscreen="1"' : '';
+      return '<iframe src="' + data.source + '" width="' + data.width + '" height="' + data.height + '"' + allowFullscreen + '></iframe>';
+    };
+    var getFlashHtml = function (data) {
+      var html = '<object data="' + data.source + '" width="' + data.width + '" height="' + data.height + '" type="application/x-shockwave-flash">';
+      if (data.poster) {
+        html += '<img src="' + data.poster + '" width="' + data.width + '" height="' + data.height + '" />';
+      }
+      html += '</object>';
+      return html;
+    };
+    var getAudioHtml = function (data, audioTemplateCallback) {
+      if (audioTemplateCallback) {
+        return audioTemplateCallback(data);
+      } else {
+        return '<audio controls="controls" src="' + data.source + '">' + (data.altsource ? '\n<source src="' + data.altsource + '"' + (data.altsourcemime ? ' type="' + data.altsourcemime + '"' : '') + ' />\n' : '') + '</audio>';
+      }
+    };
+    var getVideoHtml = function (data, videoTemplateCallback) {
+      if (videoTemplateCallback) {
+        return videoTemplateCallback(data);
+      } else {
+        return '<video width="' + data.width + '" height="' + data.height + '"' + (data.poster ? ' poster="' + data.poster + '"' : '') + ' controls="controls">\n' + '<source src="' + data.source + '"' + (data.sourcemime ? ' type="' + data.sourcemime + '"' : '') + ' />\n' + (data.altsource ? '<source src="' + data.altsource + '"' + (data.altsourcemime ? ' type="' + data.altsourcemime + '"' : '') + ' />\n' : '') + '</video>';
+      }
+    };
+    var getScriptHtml = function (data) {
+      return '<script src="' + data.source + '"></script>';
+    };
+    var dataToHtml = function (editor, dataIn) {
+      var data = global$8.extend({}, dataIn);
+      if (!data.source) {
+        global$8.extend(data, htmlToData(getScripts(editor), data.embed));
+        if (!data.source) {
+          return '';
+        }
+      }
+      if (!data.altsource) {
+        data.altsource = '';
+      }
+      if (!data.poster) {
+        data.poster = '';
+      }
+      data.source = editor.convertURL(data.source, 'source');
+      data.altsource = editor.convertURL(data.altsource, 'source');
+      data.sourcemime = guess(data.source);
+      data.altsourcemime = guess(data.altsource);
+      data.poster = editor.convertURL(data.poster, 'poster');
+      var pattern = matchPattern(data.source);
+      if (pattern) {
+        data.source = pattern.url;
+        data.type = pattern.type;
+        data.allowfullscreen = pattern.allowFullscreen;
+        data.width = data.width || String(pattern.w);
+        data.height = data.height || String(pattern.h);
+      }
+      if (data.embed) {
+        return updateHtml(data.embed, data, true);
+      } else {
+        var videoScript = getVideoScriptMatch(getScripts(editor), data.source);
+        if (videoScript) {
+          data.type = 'script';
+          data.width = String(videoScript.width);
+          data.height = String(videoScript.height);
+        }
+        var audioTemplateCallback = getAudioTemplateCallback(editor);
+        var videoTemplateCallback = getVideoTemplateCallback(editor);
+        data.width = data.width || '300';
+        data.height = data.height || '150';
+        global$8.each(data, function (value, key) {
+          data[key] = editor.dom.encode('' + value);
+        });
+        if (data.type === 'iframe') {
+          return getIframeHtml(data);
+        } else if (data.sourcemime === 'application/x-shockwave-flash') {
+          return getFlashHtml(data);
+        } else if (data.sourcemime.indexOf('audio') !== -1) {
+          return getAudioHtml(data, audioTemplateCallback);
+        } else if (data.type === 'script') {
+          return getScriptHtml(data);
+        } else {
+          return getVideoHtml(data, videoTemplateCallback);
+        }
+      }
+    };
+
+    var isMediaElement = function (element) {
+      return element.hasAttribute('data-mce-object') || element.hasAttribute('data-ephox-embed-iri');
+    };
+    var setup$2 = function (editor) {
+      editor.on('click keyup touchend', function () {
+        var selectedNode = editor.selection.getNode();
+        if (selectedNode && editor.dom.hasClass(selectedNode, 'mce-preview-object')) {
+          if (editor.dom.getAttrib(selectedNode, 'data-mce-selected')) {
+            selectedNode.setAttribute('data-mce-selected', '2');
+          }
+        }
+      });
+      editor.on('ObjectSelected', function (e) {
+        var objectType = e.target.getAttribute('data-mce-object');
+        if (objectType === 'script') {
+          e.preventDefault();
+        }
+      });
+      editor.on('ObjectResized', function (e) {
+        var target = e.target;
+        if (target.getAttribute('data-mce-object')) {
+          var html = target.getAttribute('data-mce-html');
+          if (html) {
+            html = unescape(html);
+            target.setAttribute('data-mce-html', escape(updateHtml(html, {
+              width: String(e.width),
+              height: String(e.height)
+            })));
+          }
+        }
+      });
+    };
+
+    var global$3 = tinymce.util.Tools.resolve('tinymce.util.Promise');
+
+    var cache = {};
+    var embedPromise = function (data, dataToHtml, handler) {
+      return new global$3(function (res, rej) {
+        var wrappedResolve = function (response) {
+          if (response.html) {
+            cache[data.source] = response;
+          }
+          return res({
+            url: data.source,
+            html: response.html ? response.html : dataToHtml(data)
+          });
+        };
+        if (cache[data.source]) {
+          wrappedResolve(cache[data.source]);
+        } else {
+          handler({ url: data.source }, wrappedResolve, rej);
+        }
+      });
+    };
+    var defaultPromise = function (data, dataToHtml) {
+      return global$3.resolve({
+        html: dataToHtml(data),
+        url: data.source
+      });
+    };
+    var loadedData = function (editor) {
+      return function (data) {
+        return dataToHtml(editor, data);
+      };
+    };
+    var getEmbedHtml = function (editor, data) {
+      var embedHandler = getUrlResolver(editor);
+      return embedHandler ? embedPromise(data, loadedData(editor), embedHandler) : defaultPromise(data, loadedData(editor));
+    };
+    var isCached = function (url) {
+      return has(cache, url);
+    };
+
+    var extractMeta = function (sourceInput, data) {
+      return get$1(data, sourceInput).bind(function (mainData) {
+        return get$1(mainData, 'meta');
+      });
+    };
+    var getValue = function (data, metaData, sourceInput) {
+      return function (prop) {
+        var _a;
+        var getFromData = function () {
+          return get$1(data, prop);
+        };
+        var getFromMetaData = function () {
+          return get$1(metaData, prop);
+        };
+        var getNonEmptyValue = function (c) {
+          return get$1(c, 'value').bind(function (v) {
+            return v.length > 0 ? Optional.some(v) : Optional.none();
+          });
+        };
+        var getFromValueFirst = function () {
+          return getFromData().bind(function (child) {
+            return isObject(child) ? getNonEmptyValue(child).orThunk(getFromMetaData) : getFromMetaData().orThunk(function () {
+              return Optional.from(child);
+            });
+          });
+        };
+        var getFromMetaFirst = function () {
+          return getFromMetaData().orThunk(function () {
+            return getFromData().bind(function (child) {
+              return isObject(child) ? getNonEmptyValue(child) : Optional.from(child);
+            });
+          });
+        };
+        return _a = {}, _a[prop] = (prop === sourceInput ? getFromValueFirst() : getFromMetaFirst()).getOr(''), _a;
+      };
+    };
+    var getDimensions = function (data, metaData) {
+      var dimensions = {};
+      get$1(data, 'dimensions').each(function (dims) {
+        each$1([
+          'width',
+          'height'
+        ], function (prop) {
+          get$1(metaData, prop).orThunk(function () {
+            return get$1(dims, prop);
+          }).each(function (value) {
+            return dimensions[prop] = value;
+          });
+        });
+      });
+      return dimensions;
+    };
+    var unwrap = function (data, sourceInput) {
+      var metaData = sourceInput ? extractMeta(sourceInput, data).getOr({}) : {};
+      var get = getValue(data, metaData, sourceInput);
+      return __assign(__assign(__assign(__assign(__assign({}, get('source')), get('altsource')), get('poster')), get('embed')), getDimensions(data, metaData));
+    };
+    var wrap = function (data) {
+      var wrapped = __assign(__assign({}, data), {
+        source: { value: get$1(data, 'source').getOr('') },
+        altsource: { value: get$1(data, 'altsource').getOr('') },
+        poster: { value: get$1(data, 'poster').getOr('') }
+      });
+      each$1([
+        'width',
+        'height'
+      ], function (prop) {
+        get$1(data, prop).each(function (value) {
+          var dimensions = wrapped.dimensions || {};
+          dimensions[prop] = value;
+          wrapped.dimensions = dimensions;
+        });
+      });
+      return wrapped;
+    };
+    var handleError = function (editor) {
+      return function (error) {
+        var errorMessage = error && error.msg ? 'Media embed handler error: ' + error.msg : 'Media embed handler threw unknown error.';
+        editor.notificationManager.open({
+          type: 'error',
+          text: errorMessage
+        });
+      };
+    };
+    var snippetToData = function (editor, embedSnippet) {
+      return htmlToData(getScripts(editor), embedSnippet);
+    };
+    var getEditorData = function (editor) {
+      var element = editor.selection.getNode();
+      var snippet = isMediaElement(element) ? editor.serializer.serialize(element, { selection: true }) : '';
+      return __assign({ embed: snippet }, htmlToData(getScripts(editor), snippet));
+    };
+    var addEmbedHtml = function (api, editor) {
+      return function (response) {
+        if (isString(response.url) && response.url.trim().length > 0) {
+          var html = response.html;
+          var snippetData = snippetToData(editor, html);
+          var nuData = __assign(__assign({}, snippetData), {
+            source: response.url,
+            embed: html
+          });
+          api.setData(wrap(nuData));
+        }
+      };
+    };
+    var selectPlaceholder = function (editor, beforeObjects) {
+      var afterObjects = editor.dom.select('*[data-mce-object]');
+      for (var i = 0; i < beforeObjects.length; i++) {
+        for (var y = afterObjects.length - 1; y >= 0; y--) {
+          if (beforeObjects[i] === afterObjects[y]) {
+            afterObjects.splice(y, 1);
+          }
+        }
+      }
+      editor.selection.select(afterObjects[0]);
+    };
+    var handleInsert = function (editor, html) {
+      var beforeObjects = editor.dom.select('*[data-mce-object]');
+      editor.insertContent(html);
+      selectPlaceholder(editor, beforeObjects);
+      editor.nodeChanged();
+    };
+    var submitForm = function (prevData, newData, editor) {
+      newData.embed = updateHtml(newData.embed, newData);
+      if (newData.embed && (prevData.source === newData.source || isCached(newData.source))) {
+        handleInsert(editor, newData.embed);
+      } else {
+        getEmbedHtml(editor, newData).then(function (response) {
+          handleInsert(editor, response.html);
+        }).catch(handleError(editor));
+      }
+    };
+    var showDialog = function (editor) {
+      var editorData = getEditorData(editor);
+      var currentData = Cell(editorData);
+      var initialData = wrap(editorData);
+      var handleSource = function (prevData, api) {
+        var serviceData = unwrap(api.getData(), 'source');
+        if (prevData.source !== serviceData.source) {
+          addEmbedHtml(win, editor)({
+            url: serviceData.source,
+            html: ''
+          });
+          getEmbedHtml(editor, serviceData).then(addEmbedHtml(win, editor)).catch(handleError(editor));
+        }
+      };
+      var handleEmbed = function (api) {
+        var data = unwrap(api.getData());
+        var dataFromEmbed = snippetToData(editor, data.embed);
+        api.setData(wrap(dataFromEmbed));
+      };
+      var handleUpdate = function (api, sourceInput) {
+        var data = unwrap(api.getData(), sourceInput);
+        var embed = dataToHtml(editor, data);
+        api.setData(wrap(__assign(__assign({}, data), { embed: embed })));
+      };
+      var mediaInput = [{
+          name: 'source',
+          type: 'urlinput',
+          filetype: 'media',
+          label: 'Source'
+        }];
+      var sizeInput = !hasDimensions(editor) ? [] : [{
+          type: 'sizeinput',
+          name: 'dimensions',
+          label: 'Constrain proportions',
+          constrain: true
+        }];
+      var generalTab = {
+        title: 'General',
+        name: 'general',
+        items: flatten([
+          mediaInput,
+          sizeInput
+        ])
+      };
+      var embedTextarea = {
+        type: 'textarea',
+        name: 'embed',
+        label: 'Paste your embed code below:'
+      };
+      var embedTab = {
+        title: 'Embed',
+        items: [embedTextarea]
+      };
+      var advancedFormItems = [];
+      if (hasAltSource(editor)) {
+        advancedFormItems.push({
+          name: 'altsource',
+          type: 'urlinput',
+          filetype: 'media',
+          label: 'Alternative source URL'
+        });
+      }
+      if (hasPoster(editor)) {
+        advancedFormItems.push({
+          name: 'poster',
+          type: 'urlinput',
+          filetype: 'image',
+          label: 'Media poster (Image URL)'
+        });
+      }
+      var advancedTab = {
+        title: 'Advanced',
+        name: 'advanced',
+        items: advancedFormItems
+      };
+      var tabs = [
+        generalTab,
+        embedTab
+      ];
+      if (advancedFormItems.length > 0) {
+        tabs.push(advancedTab);
+      }
+      var body = {
+        type: 'tabpanel',
+        tabs: tabs
+      };
+      var win = editor.windowManager.open({
+        title: 'Insert/Edit Media',
+        size: 'normal',
+        body: body,
+        buttons: [
+          {
+            type: 'cancel',
+            name: 'cancel',
+            text: 'Cancel'
+          },
+          {
+            type: 'submit',
+            name: 'save',
+            text: 'Save',
+            primary: true
+          }
+        ],
+        onSubmit: function (api) {
+          var serviceData = unwrap(api.getData());
+          submitForm(currentData.get(), serviceData, editor);
+          api.close();
+        },
+        onChange: function (api, detail) {
+          switch (detail.name) {
+          case 'source':
+            handleSource(currentData.get(), api);
+            break;
+          case 'embed':
+            handleEmbed(api);
+            break;
+          case 'dimensions':
+          case 'altsource':
+          case 'poster':
+            handleUpdate(api, detail.name);
+            break;
+          }
+          currentData.set(unwrap(api.getData()));
+        },
+        initialData: initialData
+      });
+    };
+
+    var get = function (editor) {
+      var showDialog$1 = function () {
+        showDialog(editor);
+      };
+      return { showDialog: showDialog$1 };
+    };
+
+    var register$1 = function (editor) {
+      var showDialog$1 = function () {
+        showDialog(editor);
+      };
+      editor.addCommand('mceMedia', showDialog$1);
+    };
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.html.Node');
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
+
+    var global = tinymce.util.Tools.resolve('tinymce.html.DomParser');
+
+    var sanitize = function (editor, html) {
+      if (shouldFilterHtml(editor) === false) {
+        return html;
+      }
+      var writer = global$4();
+      var blocked;
+      global$6({
+        validate: false,
+        allow_conditional_comments: false,
+        comment: function (text) {
+          if (!blocked) {
+            writer.comment(text);
+          }
+        },
+        cdata: function (text) {
+          if (!blocked) {
+            writer.cdata(text);
+          }
+        },
+        text: function (text, raw) {
+          if (!blocked) {
+            writer.text(text, raw);
+          }
+        },
+        start: function (name, attrs, empty) {
+          blocked = true;
+          if (name === 'script' || name === 'noscript' || name === 'svg') {
+            return;
+          }
+          for (var i = attrs.length - 1; i >= 0; i--) {
+            var attrName = attrs[i].name;
+            if (attrName.indexOf('on') === 0) {
+              delete attrs.map[attrName];
+              attrs.splice(i, 1);
+            }
+            if (attrName === 'style') {
+              attrs[i].value = editor.dom.serializeStyle(editor.dom.parseStyle(attrs[i].value), name);
+            }
+          }
+          writer.start(name, attrs, empty);
+          blocked = false;
+        },
+        end: function (name) {
+          if (blocked) {
+            return;
+          }
+          writer.end(name);
+        }
+      }, global$5({})).parse(html);
+      return writer.getContent();
+    };
+
+    var isLiveEmbedNode = function (node) {
+      var name = node.name;
+      return name === 'iframe' || name === 'video' || name === 'audio';
+    };
+    var getDimension = function (node, styles, dimension, defaultValue) {
+      if (defaultValue === void 0) {
+        defaultValue = null;
+      }
+      var value = node.attr(dimension);
+      if (isNonNullable(value)) {
+        return value;
+      } else if (!has(styles, dimension)) {
+        return defaultValue;
+      } else {
+        return null;
+      }
+    };
+    var setDimensions = function (node, previewNode, styles) {
+      var useDefaults = previewNode.name === 'img' || node.name === 'video';
+      var defaultWidth = useDefaults ? '300' : null;
+      var fallbackHeight = node.name === 'audio' ? '30' : '150';
+      var defaultHeight = useDefaults ? fallbackHeight : null;
+      previewNode.attr({
+        width: getDimension(node, styles, 'width', defaultWidth),
+        height: getDimension(node, styles, 'height', defaultHeight)
+      });
+    };
+    var appendNodeContent = function (editor, nodeName, previewNode, html) {
+      var newNode = global({
+        forced_root_block: false,
+        validate: false
+      }, editor.schema).parse(html, { context: nodeName });
+      while (newNode.firstChild) {
+        previewNode.append(newNode.firstChild);
+      }
+    };
+    var createPlaceholderNode = function (editor, node) {
+      var name = node.name;
+      var placeHolder = new global$2('img', 1);
+      placeHolder.shortEnded = true;
+      retainAttributesAndInnerHtml(editor, node, placeHolder);
+      setDimensions(node, placeHolder, {});
+      placeHolder.attr({
+        'style': node.attr('style'),
+        'src': global$1.transparentSrc,
+        'data-mce-object': name,
+        'class': 'mce-object mce-object-' + name
+      });
+      return placeHolder;
+    };
+    var createPreviewNode = function (editor, node) {
+      var name = node.name;
+      var previewWrapper = new global$2('span', 1);
+      previewWrapper.attr({
+        'contentEditable': 'false',
+        'style': node.attr('style'),
+        'data-mce-object': name,
+        'class': 'mce-preview-object mce-object-' + name
+      });
+      retainAttributesAndInnerHtml(editor, node, previewWrapper);
+      var styles = editor.dom.parseStyle(node.attr('style'));
+      var previewNode = new global$2(name, 1);
+      setDimensions(node, previewNode, styles);
+      previewNode.attr({
+        src: node.attr('src'),
+        style: node.attr('style'),
+        class: node.attr('class')
+      });
+      if (name === 'iframe') {
+        previewNode.attr({
+          allowfullscreen: node.attr('allowfullscreen'),
+          frameborder: '0'
+        });
+      } else {
+        var attrs = [
+          'controls',
+          'crossorigin',
+          'currentTime',
+          'loop',
+          'muted',
+          'poster',
+          'preload'
+        ];
+        each$1(attrs, function (attrName) {
+          previewNode.attr(attrName, node.attr(attrName));
+        });
+        var sanitizedHtml = previewWrapper.attr('data-mce-html');
+        if (isNonNullable(sanitizedHtml)) {
+          appendNodeContent(editor, name, previewNode, unescape(sanitizedHtml));
+        }
+      }
+      var shimNode = new global$2('span', 1);
+      shimNode.attr('class', 'mce-shim');
+      previewWrapper.append(previewNode);
+      previewWrapper.append(shimNode);
+      return previewWrapper;
+    };
+    var retainAttributesAndInnerHtml = function (editor, sourceNode, targetNode) {
+      var attribs = sourceNode.attributes;
+      var ai = attribs.length;
+      while (ai--) {
+        var attrName = attribs[ai].name;
+        var attrValue = attribs[ai].value;
+        if (attrName !== 'width' && attrName !== 'height' && attrName !== 'style') {
+          if (attrName === 'data' || attrName === 'src') {
+            attrValue = editor.convertURL(attrValue, attrName);
+          }
+          targetNode.attr('data-mce-p-' + attrName, attrValue);
+        }
+      }
+      var innerHtml = sourceNode.firstChild && sourceNode.firstChild.value;
+      if (innerHtml) {
+        targetNode.attr('data-mce-html', escape(sanitize(editor, innerHtml)));
+        targetNode.firstChild = null;
+      }
+    };
+    var isPageEmbedWrapper = function (node) {
+      var nodeClass = node.attr('class');
+      return nodeClass && /\btiny-pageembed\b/.test(nodeClass);
+    };
+    var isWithinEmbedWrapper = function (node) {
+      while (node = node.parent) {
+        if (node.attr('data-ephox-embed-iri') || isPageEmbedWrapper(node)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    var placeHolderConverter = function (editor) {
+      return function (nodes) {
+        var i = nodes.length;
+        var node;
+        var videoScript;
+        while (i--) {
+          node = nodes[i];
+          if (!node.parent) {
+            continue;
+          }
+          if (node.parent.attr('data-mce-object')) {
+            continue;
+          }
+          if (node.name === 'script') {
+            videoScript = getVideoScriptMatch(getScripts(editor), node.attr('src'));
+            if (!videoScript) {
+              continue;
+            }
+          }
+          if (videoScript) {
+            if (videoScript.width) {
+              node.attr('width', videoScript.width.toString());
+            }
+            if (videoScript.height) {
+              node.attr('height', videoScript.height.toString());
+            }
+          }
+          if (isLiveEmbedNode(node) && hasLiveEmbeds(editor) && global$1.ceFalse) {
+            if (!isWithinEmbedWrapper(node)) {
+              node.replace(createPreviewNode(editor, node));
+            }
+          } else {
+            if (!isWithinEmbedWrapper(node)) {
+              node.replace(createPlaceholderNode(editor, node));
+            }
+          }
+        }
+      };
+    };
+
+    var setup$1 = function (editor) {
+      editor.on('preInit', function () {
+        var specialElements = editor.schema.getSpecialElements();
+        global$8.each('video audio iframe object'.split(' '), function (name) {
+          specialElements[name] = new RegExp('</' + name + '[^>]*>', 'gi');
+        });
+        var boolAttrs = editor.schema.getBoolAttrs();
+        global$8.each('webkitallowfullscreen mozallowfullscreen allowfullscreen'.split(' '), function (name) {
+          boolAttrs[name] = {};
+        });
+        editor.parser.addNodeFilter('iframe,video,audio,object,embed,script', placeHolderConverter(editor));
+        editor.serializer.addAttributeFilter('data-mce-object', function (nodes, name) {
+          var i = nodes.length;
+          var node;
+          var realElm;
+          var ai;
+          var attribs;
+          var innerHtml;
+          var innerNode;
+          var realElmName;
+          var className;
+          while (i--) {
+            node = nodes[i];
+            if (!node.parent) {
+              continue;
+            }
+            realElmName = node.attr(name);
+            realElm = new global$2(realElmName, 1);
+            if (realElmName !== 'audio' && realElmName !== 'script') {
+              className = node.attr('class');
+              if (className && className.indexOf('mce-preview-object') !== -1) {
+                realElm.attr({
+                  width: node.firstChild.attr('width'),
+                  height: node.firstChild.attr('height')
+                });
+              } else {
+                realElm.attr({
+                  width: node.attr('width'),
+                  height: node.attr('height')
+                });
+              }
+            }
+            realElm.attr({ style: node.attr('style') });
+            attribs = node.attributes;
+            ai = attribs.length;
+            while (ai--) {
+              var attrName = attribs[ai].name;
+              if (attrName.indexOf('data-mce-p-') === 0) {
+                realElm.attr(attrName.substr(11), attribs[ai].value);
+              }
+            }
+            if (realElmName === 'script') {
+              realElm.attr('type', 'text/javascript');
+            }
+            innerHtml = node.attr('data-mce-html');
+            if (innerHtml) {
+              innerNode = new global$2('#text', 3);
+              innerNode.raw = true;
+              innerNode.value = sanitize(editor, unescape(innerHtml));
+              realElm.append(innerNode);
+            }
+            node.replace(realElm);
+          }
+        });
+      });
+      editor.on('SetContent', function () {
+        editor.$('span.mce-preview-object').each(function (index, elm) {
+          var $elm = editor.$(elm);
+          if ($elm.find('span.mce-shim').length === 0) {
+            $elm.append('<span class="mce-shim"></span>');
+          }
+        });
+      });
+    };
+
+    var setup = function (editor) {
+      editor.on('ResolveName', function (e) {
+        var name;
+        if (e.target.nodeType === 1 && (name = e.target.getAttribute('data-mce-object'))) {
+          e.name = name;
+        }
+      });
+    };
+
+    var register = function (editor) {
+      var onAction = function () {
+        return editor.execCommand('mceMedia');
+      };
+      editor.ui.registry.addToggleButton('media', {
+        tooltip: 'Insert/edit media',
+        icon: 'embed',
+        onAction: onAction,
+        onSetup: function (buttonApi) {
+          var selection = editor.selection;
+          buttonApi.setActive(isMediaElement(selection.getNode()));
+          return selection.selectorChangedWithUnbind('img[data-mce-object],span[data-mce-object],div[data-ephox-embed-iri]', buttonApi.setActive).unbind;
+        }
+      });
+      editor.ui.registry.addMenuItem('media', {
+        icon: 'embed',
+        text: 'Media...',
+        onAction: onAction
+      });
+    };
+
+    function Plugin () {
+      global$9.add('media', function (editor) {
+        register$1(editor);
+        register(editor);
+        setup(editor);
+        setup$1(editor);
+        setup$2(editor);
+        return get(editor);
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
     var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     var getKeyboardSpaces = function (editor) {
@@ -64557,206 +66117,6 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var getFontSizeFormats = function (editor) {
-      return editor.getParam('fontsize_formats');
-    };
-    var setFontSizeFormats = function (editor, fontsize_formats) {
-      editor.settings.fontsize_formats = fontsize_formats;
-    };
-    var getFontFormats = function (editor) {
-      return editor.getParam('font_formats');
-    };
-    var setFontFormats = function (editor, font_formats) {
-      editor.settings.font_formats = font_formats;
-    };
-    var getFontSizeStyleValues = function (editor) {
-      return editor.getParam('font_size_style_values', 'xx-small,x-small,small,medium,large,x-large,xx-large');
-    };
-    var setInlineStyles = function (editor, inline_styles) {
-      editor.settings.inline_styles = inline_styles;
-    };
-
-    var overrideFormats = function (editor) {
-      var alignElements = 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li,table', fontSizes = global.explode(getFontSizeStyleValues(editor)), schema = editor.schema;
-      editor.formatter.register({
-        alignleft: {
-          selector: alignElements,
-          attributes: { align: 'left' }
-        },
-        aligncenter: {
-          selector: alignElements,
-          attributes: { align: 'center' }
-        },
-        alignright: {
-          selector: alignElements,
-          attributes: { align: 'right' }
-        },
-        alignjustify: {
-          selector: alignElements,
-          attributes: { align: 'justify' }
-        },
-        bold: [
-          {
-            inline: 'b',
-            remove: 'all',
-            preserve_attributes: [
-              'class',
-              'style'
-            ]
-          },
-          {
-            inline: 'strong',
-            remove: 'all',
-            preserve_attributes: [
-              'class',
-              'style'
-            ]
-          },
-          {
-            inline: 'span',
-            styles: { fontWeight: 'bold' }
-          }
-        ],
-        italic: [
-          {
-            inline: 'i',
-            remove: 'all',
-            preserve_attributes: [
-              'class',
-              'style'
-            ]
-          },
-          {
-            inline: 'em',
-            remove: 'all',
-            preserve_attributes: [
-              'class',
-              'style'
-            ]
-          },
-          {
-            inline: 'span',
-            styles: { fontStyle: 'italic' }
-          }
-        ],
-        underline: [
-          {
-            inline: 'u',
-            remove: 'all',
-            preserve_attributes: [
-              'class',
-              'style'
-            ]
-          },
-          {
-            inline: 'span',
-            styles: { textDecoration: 'underline' },
-            exact: true
-          }
-        ],
-        strikethrough: [
-          {
-            inline: 'strike',
-            remove: 'all',
-            preserve_attributes: [
-              'class',
-              'style'
-            ]
-          },
-          {
-            inline: 'span',
-            styles: { textDecoration: 'line-through' },
-            exact: true
-          }
-        ],
-        fontname: {
-          inline: 'font',
-          toggle: false,
-          attributes: { face: '%value' }
-        },
-        fontsize: {
-          inline: 'font',
-          toggle: false,
-          attributes: {
-            size: function (vars) {
-              return String(global.inArray(fontSizes, vars.value) + 1);
-            }
-          }
-        },
-        forecolor: {
-          inline: 'font',
-          attributes: { color: '%value' },
-          links: true,
-          remove_similar: true,
-          clear_child_styles: true
-        },
-        hilitecolor: {
-          inline: 'font',
-          styles: { backgroundColor: '%value' },
-          links: true,
-          remove_similar: true,
-          clear_child_styles: true
-        }
-      });
-      global.each('b,i,u,strike'.split(','), function (name) {
-        schema.addValidElements(name + '[*]');
-      });
-      if (!schema.getElementRule('font')) {
-        schema.addValidElements('font[face|size|color|style]');
-      }
-      global.each(alignElements.split(','), function (name) {
-        var rule = schema.getElementRule(name);
-        if (rule) {
-          if (!rule.attributes.align) {
-            rule.attributes.align = {};
-            rule.attributesOrder.push('align');
-          }
-        }
-      });
-    };
-    var overrideSettings = function (editor) {
-      var defaultFontsizeFormats = '8pt=1 10pt=2 12pt=3 14pt=4 18pt=5 24pt=6 36pt=7';
-      var defaultFontsFormats = 'Andale Mono=andale mono,monospace;' + 'Arial=arial,helvetica,sans-serif;' + 'Arial Black=arial black,sans-serif;' + 'Book Antiqua=book antiqua,palatino,serif;' + 'Comic Sans MS=comic sans ms,sans-serif;' + 'Courier New=courier new,courier,monospace;' + 'Georgia=georgia,palatino,serif;' + 'Helvetica=helvetica,arial,sans-serif;' + 'Impact=impact,sans-serif;' + 'Symbol=symbol;' + 'Tahoma=tahoma,arial,helvetica,sans-serif;' + 'Terminal=terminal,monaco,monospace;' + 'Times New Roman=times new roman,times,serif;' + 'Trebuchet MS=trebuchet ms,geneva,sans-serif;' + 'Verdana=verdana,geneva,sans-serif;' + 'Webdings=webdings;' + 'Wingdings=wingdings,zapf dingbats';
-      setInlineStyles(editor, false);
-      if (!getFontSizeFormats(editor)) {
-        setFontSizeFormats(editor, defaultFontsizeFormats);
-      }
-      if (!getFontFormats(editor)) {
-        setFontFormats(editor, defaultFontsFormats);
-      }
-    };
-    var setup = function (editor) {
-      overrideSettings(editor);
-      editor.on('PreInit', function () {
-        return overrideFormats(editor);
-      });
-    };
-
-    function Plugin () {
-      global$1.add('legacyoutput', function (editor) {
-        setup(editor);
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
     var global$2 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
@@ -64884,109 +66244,41 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$2 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
-    var global$1 = tinymce.util.Tools.resolve('tinymce.dom.DOMUtils');
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var enableWhenDirty = function (editor) {
-      return editor.getParam('save_enablewhendirty', true);
-    };
-    var hasOnSaveCallback = function (editor) {
-      return !!editor.getParam('save_onsavecallback');
-    };
-    var hasOnCancelCallback = function (editor) {
-      return !!editor.getParam('save_oncancelcallback');
-    };
-
-    var displayErrorMessage = function (editor, message) {
-      editor.notificationManager.open({
-        text: message,
-        type: 'error'
-      });
-    };
-    var save = function (editor) {
-      var formObj = global$1.DOM.getParent(editor.id, 'form');
-      if (enableWhenDirty(editor) && !editor.isDirty()) {
-        return;
-      }
-      editor.save();
-      if (hasOnSaveCallback(editor)) {
-        editor.execCallback('save_onsavecallback', editor);
-        editor.nodeChanged();
-        return;
-      }
-      if (formObj) {
-        editor.setDirty(false);
-        if (!formObj.onsubmit || formObj.onsubmit()) {
-          if (typeof formObj.submit === 'function') {
-            formObj.submit();
-          } else {
-            displayErrorMessage(editor, 'Error: Form submit field collision.');
-          }
-        }
-        editor.nodeChanged();
-      } else {
-        displayErrorMessage(editor, 'Error: No form element found.');
-      }
-    };
-    var cancel = function (editor) {
-      var h = global.trim(editor.startContent);
-      if (hasOnCancelCallback(editor)) {
-        editor.execCallback('save_oncancelcallback', editor);
-        return;
-      }
-      editor.resetContent(h);
-    };
+    var global = tinymce.util.Tools.resolve('tinymce.Env');
 
     var register$1 = function (editor) {
-      editor.addCommand('mceSave', function () {
-        save(editor);
-      });
-      editor.addCommand('mceCancel', function () {
-        cancel(editor);
+      editor.addCommand('mcePrint', function () {
+        if (global.browser.isIE()) {
+          editor.getDoc().execCommand('print', false, null);
+        } else {
+          editor.getWin().print();
+        }
       });
     };
 
-    var stateToggle = function (editor) {
-      return function (api) {
-        var handler = function () {
-          api.setDisabled(enableWhenDirty(editor) && !editor.isDirty());
-        };
-        handler();
-        editor.on('NodeChange dirty', handler);
-        return function () {
-          return editor.off('NodeChange dirty', handler);
-        };
-      };
-    };
     var register = function (editor) {
-      editor.ui.registry.addButton('save', {
-        icon: 'save',
-        tooltip: 'Save',
-        disabled: true,
-        onAction: function () {
-          return editor.execCommand('mceSave');
-        },
-        onSetup: stateToggle(editor)
+      var onAction = function () {
+        return editor.execCommand('mcePrint');
+      };
+      editor.ui.registry.addButton('print', {
+        icon: 'print',
+        tooltip: 'Print',
+        onAction: onAction
       });
-      editor.ui.registry.addButton('cancel', {
-        icon: 'cancel',
-        tooltip: 'Cancel',
-        disabled: true,
-        onAction: function () {
-          return editor.execCommand('mceCancel');
-        },
-        onSetup: stateToggle(editor)
+      editor.ui.registry.addMenuItem('print', {
+        text: 'Print...',
+        icon: 'print',
+        onAction: onAction
       });
-      editor.addShortcut('Meta+S', '', 'mceSave');
     };
 
     function Plugin () {
-      global$2.add('save', function (editor) {
-        register(editor);
+      global$1.add('print', function (editor) {
         register$1(editor);
+        register(editor);
+        editor.addShortcut('Meta+P', '', 'mcePrint');
       });
     }
 
@@ -65005,19 +66297,123 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$9 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+    var global$3 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
-    var __assign = function () {
-      __assign = Object.assign || function __assign(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-          s = arguments[i];
-          for (var p in s)
-            if (Object.prototype.hasOwnProperty.call(s, p))
-              t[p] = s[p];
+    var unique = 0;
+    var generate = function (prefix) {
+      var date = new Date();
+      var time = date.getTime();
+      var random = Math.floor(Math.random() * 1000000000);
+      unique++;
+      return prefix + '_' + random + unique + String(time);
+    };
+
+    var createTableHtml = function (cols, rows) {
+      var html = '<table data-mce-id="mce" style="width: 100%">';
+      html += '<tbody>';
+      for (var y = 0; y < rows; y++) {
+        html += '<tr>';
+        for (var x = 0; x < cols; x++) {
+          html += '<td><br></td>';
         }
-        return t;
-      };
-      return __assign.apply(this, arguments);
+        html += '</tr>';
+      }
+      html += '</tbody>';
+      html += '</table>';
+      return html;
+    };
+    var getInsertedElement = function (editor) {
+      var elms = editor.dom.select('*[data-mce-id]');
+      return elms[0];
+    };
+    var insertTableHtml = function (editor, cols, rows) {
+      editor.undoManager.transact(function () {
+        editor.insertContent(createTableHtml(cols, rows));
+        var tableElm = getInsertedElement(editor);
+        tableElm.removeAttribute('data-mce-id');
+        var cellElm = editor.dom.select('td,th', tableElm);
+        editor.selection.setCursorLocation(cellElm[0], 0);
+      });
+    };
+    var insertTable = function (editor, cols, rows) {
+      editor.plugins.table ? editor.plugins.table.insertTable(cols, rows) : insertTableHtml(editor, cols, rows);
+    };
+    var insertBlob = function (editor, base64, blob) {
+      var blobCache = editor.editorUpload.blobCache;
+      var blobInfo = blobCache.create(generate('mceu'), blob, base64);
+      blobCache.add(blobInfo);
+      editor.insertContent(editor.dom.createHTML('img', { src: blobInfo.blobUri() }));
+    };
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.util.Promise');
+
+    var blobToBase64 = function (blob) {
+      return new global$2(function (resolve) {
+        var reader = new FileReader();
+        reader.onloadend = function () {
+          resolve(reader.result.split(',')[1]);
+        };
+        reader.readAsDataURL(blob);
+      });
+    };
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Delay');
+
+    var pickFile = function (editor) {
+      return new global$2(function (resolve) {
+        var fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.position = 'fixed';
+        fileInput.style.left = '0';
+        fileInput.style.top = '0';
+        fileInput.style.opacity = '0.001';
+        document.body.appendChild(fileInput);
+        var changeHandler = function (e) {
+          resolve(Array.prototype.slice.call(e.target.files));
+        };
+        fileInput.addEventListener('change', changeHandler);
+        var cancelHandler = function (e) {
+          var cleanup = function () {
+            resolve([]);
+            fileInput.parentNode.removeChild(fileInput);
+          };
+          if (global$1.os.isAndroid() && e.type !== 'remove') {
+            global.setEditorTimeout(editor, cleanup, 0);
+          } else {
+            cleanup();
+          }
+          editor.off('focusin remove', cancelHandler);
+        };
+        editor.on('focusin remove', cancelHandler);
+        fileInput.click();
+      });
+    };
+
+    var setupButtons = function (editor) {
+      editor.ui.registry.addButton('quickimage', {
+        icon: 'image',
+        tooltip: 'Insert image',
+        onAction: function () {
+          pickFile(editor).then(function (files) {
+            if (files.length > 0) {
+              var blob_1 = files[0];
+              blobToBase64(blob_1).then(function (base64) {
+                insertBlob(editor, base64, blob_1);
+              });
+            }
+          });
+        }
+      });
+      editor.ui.registry.addButton('quicktable', {
+        icon: 'table',
+        tooltip: 'Insert table',
+        onAction: function () {
+          insertTable(editor, 2, 2);
+        }
+      });
     };
 
     var typeOf = function (x) {
@@ -65037,15 +66433,22 @@ tinymce.IconManager.add('default', {
         return typeOf(value) === type;
       };
     };
+    var isSimpleType = function (type) {
+      return function (value) {
+        return typeof value === type;
+      };
+    };
+    var eq = function (t) {
+      return function (a) {
+        return t === a;
+      };
+    };
     var isString = isType('string');
     var isObject = isType('object');
     var isArray = isType('array');
-    var isNullable = function (a) {
-      return a === null || a === undefined;
-    };
-    var isNonNullable = function (a) {
-      return !isNullable(a);
-    };
+    var isBoolean = isSimpleType('boolean');
+    var isUndefined = eq(undefined);
+    var isFunction = isSimpleType('function');
 
     var noop = function () {
     };
@@ -65149,1204 +66552,329 @@ tinymce.IconManager.add('default', {
       from: from
     };
 
-    var nativePush = Array.prototype.push;
-    var each$1 = function (xs, f) {
-      for (var i = 0, len = xs.length; i < len; i++) {
-        var x = xs[i];
-        f(x, i);
-      }
-    };
-    var flatten = function (xs) {
-      var r = [];
-      for (var i = 0, len = xs.length; i < len; ++i) {
-        if (!isArray(xs[i])) {
-          throw new Error('Arr.flatten item ' + i + ' was not an array, input: ' + xs);
-        }
-        nativePush.apply(r, xs[i]);
-      }
-      return r;
-    };
-
-    var Cell = function (initial) {
-      var value = initial;
-      var get = function () {
-        return value;
-      };
-      var set = function (v) {
-        value = v;
-      };
-      return {
-        get: get,
-        set: set
-      };
-    };
-
-    var keys = Object.keys;
-    var hasOwnProperty = Object.hasOwnProperty;
-    var each = function (obj, f) {
-      var props = keys(obj);
-      for (var k = 0, len = props.length; k < len; k++) {
-        var i = props[k];
-        var x = obj[i];
-        f(x, i);
-      }
-    };
-    var get$1 = function (obj, key) {
-      return has(obj, key) ? Optional.from(obj[key]) : Optional.none();
-    };
-    var has = function (obj, key) {
-      return hasOwnProperty.call(obj, key);
-    };
-
-    var getScripts = function (editor) {
-      return editor.getParam('media_scripts');
-    };
-    var getAudioTemplateCallback = function (editor) {
-      return editor.getParam('audio_template_callback');
-    };
-    var getVideoTemplateCallback = function (editor) {
-      return editor.getParam('video_template_callback');
-    };
-    var hasLiveEmbeds = function (editor) {
-      return editor.getParam('media_live_embeds', true);
-    };
-    var shouldFilterHtml = function (editor) {
-      return editor.getParam('media_filter_html', true);
-    };
-    var getUrlResolver = function (editor) {
-      return editor.getParam('media_url_resolver');
-    };
-    var hasAltSource = function (editor) {
-      return editor.getParam('media_alt_source', true);
-    };
-    var hasPoster = function (editor) {
-      return editor.getParam('media_poster', true);
-    };
-    var hasDimensions = function (editor) {
-      return editor.getParam('media_dimensions', true);
-    };
-
-    var global$8 = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var global$7 = tinymce.util.Tools.resolve('tinymce.dom.DOMUtils');
-
-    var global$6 = tinymce.util.Tools.resolve('tinymce.html.SaxParser');
-
-    var getVideoScriptMatch = function (prefixes, src) {
-      if (prefixes) {
-        for (var i = 0; i < prefixes.length; i++) {
-          if (src.indexOf(prefixes[i].filter) !== -1) {
-            return prefixes[i];
-          }
-        }
-      }
-    };
-
-    var DOM$1 = global$7.DOM;
-    var trimPx = function (value) {
-      return value.replace(/px$/, '');
-    };
-    var getEphoxEmbedData = function (attrs) {
-      var style = attrs.map.style;
-      var styles = style ? DOM$1.parseStyle(style) : {};
-      return {
-        type: 'ephox-embed-iri',
-        source: attrs.map['data-ephox-embed-iri'],
-        altsource: '',
-        poster: '',
-        width: get$1(styles, 'max-width').map(trimPx).getOr(''),
-        height: get$1(styles, 'max-height').map(trimPx).getOr('')
-      };
-    };
-    var htmlToData = function (prefixes, html) {
-      var isEphoxEmbed = Cell(false);
-      var data = {};
-      global$6({
-        validate: false,
-        allow_conditional_comments: true,
-        start: function (name, attrs) {
-          if (isEphoxEmbed.get()) ; else if (has(attrs.map, 'data-ephox-embed-iri')) {
-            isEphoxEmbed.set(true);
-            data = getEphoxEmbedData(attrs);
-          } else {
-            if (!data.source && name === 'param') {
-              data.source = attrs.map.movie;
-            }
-            if (name === 'iframe' || name === 'object' || name === 'embed' || name === 'video' || name === 'audio') {
-              if (!data.type) {
-                data.type = name;
-              }
-              data = global$8.extend(attrs.map, data);
-            }
-            if (name === 'script') {
-              var videoScript = getVideoScriptMatch(prefixes, attrs.map.src);
-              if (!videoScript) {
-                return;
-              }
-              data = {
-                type: 'script',
-                source: attrs.map.src,
-                width: String(videoScript.width),
-                height: String(videoScript.height)
-              };
-            }
-            if (name === 'source') {
-              if (!data.source) {
-                data.source = attrs.map.src;
-              } else if (!data.altsource) {
-                data.altsource = attrs.map.src;
-              }
-            }
-            if (name === 'img' && !data.poster) {
-              data.poster = attrs.map.src;
-            }
-          }
-        }
-      }).parse(html);
-      data.source = data.source || data.src || data.data;
-      data.altsource = data.altsource || '';
-      data.poster = data.poster || '';
-      return data;
-    };
-
-    var guess = function (url) {
-      var mimes = {
-        mp3: 'audio/mpeg',
-        m4a: 'audio/x-m4a',
-        wav: 'audio/wav',
-        mp4: 'video/mp4',
-        webm: 'video/webm',
-        ogg: 'video/ogg',
-        swf: 'application/x-shockwave-flash'
-      };
-      var fileEnd = url.toLowerCase().split('.').pop();
-      var mime = mimes[fileEnd];
-      return mime ? mime : '';
-    };
-
-    var global$5 = tinymce.util.Tools.resolve('tinymce.html.Schema');
-
-    var global$4 = tinymce.util.Tools.resolve('tinymce.html.Writer');
-
-    var DOM = global$7.DOM;
-    var addPx = function (value) {
-      return /^[0-9.]+$/.test(value) ? value + 'px' : value;
-    };
-    var setAttributes = function (attrs, updatedAttrs) {
-      each(updatedAttrs, function (val, name) {
-        var value = '' + val;
-        if (attrs.map[name]) {
-          var i = attrs.length;
-          while (i--) {
-            var attr = attrs[i];
-            if (attr.name === name) {
-              if (value) {
-                attrs.map[name] = value;
-                attr.value = value;
-              } else {
-                delete attrs.map[name];
-                attrs.splice(i, 1);
-              }
-            }
-          }
-        } else if (value) {
-          attrs.push({
-            name: name,
-            value: value
-          });
-          attrs.map[name] = value;
-        }
-      });
-    };
-    var updateEphoxEmbed = function (data, attrs) {
-      var style = attrs.map.style;
-      var styleMap = style ? DOM.parseStyle(style) : {};
-      styleMap['max-width'] = addPx(data.width);
-      styleMap['max-height'] = addPx(data.height);
-      setAttributes(attrs, { style: DOM.serializeStyle(styleMap) });
-    };
-    var sources = [
-      'source',
-      'altsource'
-    ];
-    var updateHtml = function (html, data, updateAll) {
-      var writer = global$4();
-      var isEphoxEmbed = Cell(false);
-      var sourceCount = 0;
-      var hasImage;
-      global$6({
-        validate: false,
-        allow_conditional_comments: true,
-        comment: function (text) {
-          writer.comment(text);
-        },
-        cdata: function (text) {
-          writer.cdata(text);
-        },
-        text: function (text, raw) {
-          writer.text(text, raw);
-        },
-        start: function (name, attrs, empty) {
-          if (isEphoxEmbed.get()) ; else if (has(attrs.map, 'data-ephox-embed-iri')) {
-            isEphoxEmbed.set(true);
-            updateEphoxEmbed(data, attrs);
-          } else {
-            switch (name) {
-            case 'video':
-            case 'object':
-            case 'embed':
-            case 'img':
-            case 'iframe':
-              if (data.height !== undefined && data.width !== undefined) {
-                setAttributes(attrs, {
-                  width: data.width,
-                  height: data.height
-                });
-              }
-              break;
-            }
-            if (updateAll) {
-              switch (name) {
-              case 'video':
-                setAttributes(attrs, {
-                  poster: data.poster,
-                  src: ''
-                });
-                if (data.altsource) {
-                  setAttributes(attrs, { src: '' });
-                }
-                break;
-              case 'iframe':
-                setAttributes(attrs, { src: data.source });
-                break;
-              case 'source':
-                if (sourceCount < 2) {
-                  setAttributes(attrs, {
-                    src: data[sources[sourceCount]],
-                    type: data[sources[sourceCount] + 'mime']
-                  });
-                  if (!data[sources[sourceCount]]) {
-                    return;
-                  }
-                }
-                sourceCount++;
-                break;
-              case 'img':
-                if (!data.poster) {
-                  return;
-                }
-                hasImage = true;
-                break;
-              }
-            }
-          }
-          writer.start(name, attrs, empty);
-        },
-        end: function (name) {
-          if (!isEphoxEmbed.get()) {
-            if (name === 'video' && updateAll) {
-              for (var index = 0; index < 2; index++) {
-                if (data[sources[index]]) {
-                  var attrs = [];
-                  attrs.map = {};
-                  if (sourceCount <= index) {
-                    setAttributes(attrs, {
-                      src: data[sources[index]],
-                      type: data[sources[index] + 'mime']
-                    });
-                    writer.start('source', attrs, true);
-                  }
-                }
-              }
-            }
-            if (data.poster && name === 'object' && updateAll && !hasImage) {
-              var imgAttrs = [];
-              imgAttrs.map = {};
-              setAttributes(imgAttrs, {
-                src: data.poster,
-                width: data.width,
-                height: data.height
-              });
-              writer.start('img', imgAttrs, true);
-            }
-          }
-          writer.end(name);
-        }
-      }, global$5({})).parse(html);
-      return writer.getContent();
-    };
-
-    var urlPatterns = [
-      {
-        regex: /youtu\.be\/([\w\-_\?&=.]+)/i,
-        type: 'iframe',
-        w: 560,
-        h: 314,
-        url: 'www.youtube.com/embed/$1',
-        allowFullscreen: true
-      },
-      {
-        regex: /youtube\.com(.+)v=([^&]+)(&([a-z0-9&=\-_]+))?/i,
-        type: 'iframe',
-        w: 560,
-        h: 314,
-        url: 'www.youtube.com/embed/$2?$4',
-        allowFullscreen: true
-      },
-      {
-        regex: /youtube.com\/embed\/([a-z0-9\?&=\-_]+)/i,
-        type: 'iframe',
-        w: 560,
-        h: 314,
-        url: 'www.youtube.com/embed/$1',
-        allowFullscreen: true
-      },
-      {
-        regex: /vimeo\.com\/([0-9]+)/,
-        type: 'iframe',
-        w: 425,
-        h: 350,
-        url: 'player.vimeo.com/video/$1?title=0&byline=0&portrait=0&color=8dc7dc',
-        allowFullscreen: true
-      },
-      {
-        regex: /vimeo\.com\/(.*)\/([0-9]+)/,
-        type: 'iframe',
-        w: 425,
-        h: 350,
-        url: 'player.vimeo.com/video/$2?title=0&amp;byline=0',
-        allowFullscreen: true
-      },
-      {
-        regex: /maps\.google\.([a-z]{2,3})\/maps\/(.+)msid=(.+)/,
-        type: 'iframe',
-        w: 425,
-        h: 350,
-        url: 'maps.google.com/maps/ms?msid=$2&output=embed"',
-        allowFullscreen: false
-      },
-      {
-        regex: /dailymotion\.com\/video\/([^_]+)/,
-        type: 'iframe',
-        w: 480,
-        h: 270,
-        url: 'www.dailymotion.com/embed/video/$1',
-        allowFullscreen: true
-      },
-      {
-        regex: /dai\.ly\/([^_]+)/,
-        type: 'iframe',
-        w: 480,
-        h: 270,
-        url: 'www.dailymotion.com/embed/video/$1',
-        allowFullscreen: true
-      }
-    ];
-    var getProtocol = function (url) {
-      var protocolMatches = url.match(/^(https?:\/\/|www\.)(.+)$/i);
-      if (protocolMatches && protocolMatches.length > 1) {
-        return protocolMatches[1] === 'www.' ? 'https://' : protocolMatches[1];
+    function ClosestOrAncestor (is, ancestor, scope, a, isRoot) {
+      if (is(scope, a)) {
+        return Optional.some(scope);
+      } else if (isFunction(isRoot) && isRoot(scope)) {
+        return Optional.none();
       } else {
-        return 'https://';
+        return ancestor(scope, a, isRoot);
       }
+    }
+
+    var ELEMENT = 1;
+
+    var fromHtml = function (html, scope) {
+      var doc = scope || document;
+      var div = doc.createElement('div');
+      div.innerHTML = html;
+      if (!div.hasChildNodes() || div.childNodes.length > 1) {
+        console.error('HTML does not have a single root node', html);
+        throw new Error('HTML must have a single root node');
+      }
+      return fromDom(div.childNodes[0]);
     };
-    var getUrl = function (pattern, url) {
-      var protocol = getProtocol(url);
-      var match = pattern.regex.exec(url);
-      var newUrl = protocol + pattern.url;
-      var _loop_1 = function (i) {
-        newUrl = newUrl.replace('$' + i, function () {
-          return match[i] ? match[i] : '';
-        });
-      };
-      for (var i = 0; i < match.length; i++) {
-        _loop_1(i);
-      }
-      return newUrl.replace(/\?$/, '');
+    var fromTag = function (tag, scope) {
+      var doc = scope || document;
+      var node = doc.createElement(tag);
+      return fromDom(node);
     };
-    var matchPattern = function (url) {
-      var patterns = urlPatterns.filter(function (pattern) {
-        return pattern.regex.test(url);
-      });
-      if (patterns.length > 0) {
-        return global$8.extend({}, patterns[0], { url: getUrl(patterns[0], url) });
-      } else {
-        return null;
+    var fromText = function (text, scope) {
+      var doc = scope || document;
+      var node = doc.createTextNode(text);
+      return fromDom(node);
+    };
+    var fromDom = function (node) {
+      if (node === null || node === undefined) {
+        throw new Error('Node cannot be null or undefined');
       }
+      return { dom: node };
+    };
+    var fromPoint = function (docElm, x, y) {
+      return Optional.from(docElm.dom.elementFromPoint(x, y)).map(fromDom);
+    };
+    var SugarElement = {
+      fromHtml: fromHtml,
+      fromTag: fromTag,
+      fromText: fromText,
+      fromDom: fromDom,
+      fromPoint: fromPoint
     };
 
-    var getIframeHtml = function (data) {
-      var allowFullscreen = data.allowfullscreen ? ' allowFullscreen="1"' : '';
-      return '<iframe src="' + data.source + '" width="' + data.width + '" height="' + data.height + '"' + allowFullscreen + '></iframe>';
-    };
-    var getFlashHtml = function (data) {
-      var html = '<object data="' + data.source + '" width="' + data.width + '" height="' + data.height + '" type="application/x-shockwave-flash">';
-      if (data.poster) {
-        html += '<img src="' + data.poster + '" width="' + data.width + '" height="' + data.height + '" />';
-      }
-      html += '</object>';
-      return html;
-    };
-    var getAudioHtml = function (data, audioTemplateCallback) {
-      if (audioTemplateCallback) {
-        return audioTemplateCallback(data);
+    var is = function (element, selector) {
+      var dom = element.dom;
+      if (dom.nodeType !== ELEMENT) {
+        return false;
       } else {
-        return '<audio controls="controls" src="' + data.source + '">' + (data.altsource ? '\n<source src="' + data.altsource + '"' + (data.altsourcemime ? ' type="' + data.altsourcemime + '"' : '') + ' />\n' : '') + '</audio>';
-      }
-    };
-    var getVideoHtml = function (data, videoTemplateCallback) {
-      if (videoTemplateCallback) {
-        return videoTemplateCallback(data);
-      } else {
-        return '<video width="' + data.width + '" height="' + data.height + '"' + (data.poster ? ' poster="' + data.poster + '"' : '') + ' controls="controls">\n' + '<source src="' + data.source + '"' + (data.sourcemime ? ' type="' + data.sourcemime + '"' : '') + ' />\n' + (data.altsource ? '<source src="' + data.altsource + '"' + (data.altsourcemime ? ' type="' + data.altsourcemime + '"' : '') + ' />\n' : '') + '</video>';
-      }
-    };
-    var getScriptHtml = function (data) {
-      return '<script src="' + data.source + '"></script>';
-    };
-    var dataToHtml = function (editor, dataIn) {
-      var data = global$8.extend({}, dataIn);
-      if (!data.source) {
-        global$8.extend(data, htmlToData(getScripts(editor), data.embed));
-        if (!data.source) {
-          return '';
-        }
-      }
-      if (!data.altsource) {
-        data.altsource = '';
-      }
-      if (!data.poster) {
-        data.poster = '';
-      }
-      data.source = editor.convertURL(data.source, 'source');
-      data.altsource = editor.convertURL(data.altsource, 'source');
-      data.sourcemime = guess(data.source);
-      data.altsourcemime = guess(data.altsource);
-      data.poster = editor.convertURL(data.poster, 'poster');
-      var pattern = matchPattern(data.source);
-      if (pattern) {
-        data.source = pattern.url;
-        data.type = pattern.type;
-        data.allowfullscreen = pattern.allowFullscreen;
-        data.width = data.width || String(pattern.w);
-        data.height = data.height || String(pattern.h);
-      }
-      if (data.embed) {
-        return updateHtml(data.embed, data, true);
-      } else {
-        var videoScript = getVideoScriptMatch(getScripts(editor), data.source);
-        if (videoScript) {
-          data.type = 'script';
-          data.width = String(videoScript.width);
-          data.height = String(videoScript.height);
-        }
-        var audioTemplateCallback = getAudioTemplateCallback(editor);
-        var videoTemplateCallback = getVideoTemplateCallback(editor);
-        data.width = data.width || '300';
-        data.height = data.height || '150';
-        global$8.each(data, function (value, key) {
-          data[key] = editor.dom.encode('' + value);
-        });
-        if (data.type === 'iframe') {
-          return getIframeHtml(data);
-        } else if (data.sourcemime === 'application/x-shockwave-flash') {
-          return getFlashHtml(data);
-        } else if (data.sourcemime.indexOf('audio') !== -1) {
-          return getAudioHtml(data, audioTemplateCallback);
-        } else if (data.type === 'script') {
-          return getScriptHtml(data);
+        var elem = dom;
+        if (elem.matches !== undefined) {
+          return elem.matches(selector);
+        } else if (elem.msMatchesSelector !== undefined) {
+          return elem.msMatchesSelector(selector);
+        } else if (elem.webkitMatchesSelector !== undefined) {
+          return elem.webkitMatchesSelector(selector);
+        } else if (elem.mozMatchesSelector !== undefined) {
+          return elem.mozMatchesSelector(selector);
         } else {
-          return getVideoHtml(data, videoTemplateCallback);
+          throw new Error('Browser lacks native selectors');
         }
       }
     };
 
-    var isMediaElement = function (element) {
-      return element.hasAttribute('data-mce-object') || element.hasAttribute('data-ephox-embed-iri');
-    };
-    var setup$2 = function (editor) {
-      editor.on('click keyup touchend', function () {
-        var selectedNode = editor.selection.getNode();
-        if (selectedNode && editor.dom.hasClass(selectedNode, 'mce-preview-object')) {
-          if (editor.dom.getAttrib(selectedNode, 'data-mce-selected')) {
-            selectedNode.setAttribute('data-mce-selected', '2');
-          }
-        }
-      });
-      editor.on('ObjectSelected', function (e) {
-        var objectType = e.target.getAttribute('data-mce-object');
-        if (objectType === 'script') {
-          e.preventDefault();
-        }
-      });
-      editor.on('ObjectResized', function (e) {
-        var target = e.target;
-        if (target.getAttribute('data-mce-object')) {
-          var html = target.getAttribute('data-mce-html');
-          if (html) {
-            html = unescape(html);
-            target.setAttribute('data-mce-html', escape(updateHtml(html, {
-              width: String(e.width),
-              height: String(e.height)
-            })));
-          }
-        }
-      });
+    typeof window !== 'undefined' ? window : Function('return this;')();
+
+    var name = function (element) {
+      var r = element.dom.nodeName;
+      return r.toLowerCase();
     };
 
-    var global$3 = tinymce.util.Tools.resolve('tinymce.util.Promise');
-
-    var cache = {};
-    var embedPromise = function (data, dataToHtml, handler) {
-      return new global$3(function (res, rej) {
-        var wrappedResolve = function (response) {
-          if (response.html) {
-            cache[data.source] = response;
-          }
-          return res({
-            url: data.source,
-            html: response.html ? response.html : dataToHtml(data)
-          });
-        };
-        if (cache[data.source]) {
-          wrappedResolve(cache[data.source]);
-        } else {
-          handler({ url: data.source }, wrappedResolve, rej);
-        }
-      });
-    };
-    var defaultPromise = function (data, dataToHtml) {
-      return global$3.resolve({
-        html: dataToHtml(data),
-        url: data.source
-      });
-    };
-    var loadedData = function (editor) {
-      return function (data) {
-        return dataToHtml(editor, data);
-      };
-    };
-    var getEmbedHtml = function (editor, data) {
-      var embedHandler = getUrlResolver(editor);
-      return embedHandler ? embedPromise(data, loadedData(editor), embedHandler) : defaultPromise(data, loadedData(editor));
-    };
-    var isCached = function (url) {
-      return has(cache, url);
-    };
-
-    var extractMeta = function (sourceInput, data) {
-      return get$1(data, sourceInput).bind(function (mainData) {
-        return get$1(mainData, 'meta');
-      });
-    };
-    var getValue = function (data, metaData, sourceInput) {
-      return function (prop) {
-        var _a;
-        var getFromData = function () {
-          return get$1(data, prop);
-        };
-        var getFromMetaData = function () {
-          return get$1(metaData, prop);
-        };
-        var getNonEmptyValue = function (c) {
-          return get$1(c, 'value').bind(function (v) {
-            return v.length > 0 ? Optional.some(v) : Optional.none();
-          });
-        };
-        var getFromValueFirst = function () {
-          return getFromData().bind(function (child) {
-            return isObject(child) ? getNonEmptyValue(child).orThunk(getFromMetaData) : getFromMetaData().orThunk(function () {
-              return Optional.from(child);
-            });
-          });
-        };
-        var getFromMetaFirst = function () {
-          return getFromMetaData().orThunk(function () {
-            return getFromData().bind(function (child) {
-              return isObject(child) ? getNonEmptyValue(child) : Optional.from(child);
-            });
-          });
-        };
-        return _a = {}, _a[prop] = (prop === sourceInput ? getFromValueFirst() : getFromMetaFirst()).getOr(''), _a;
-      };
-    };
-    var getDimensions = function (data, metaData) {
-      var dimensions = {};
-      get$1(data, 'dimensions').each(function (dims) {
-        each$1([
-          'width',
-          'height'
-        ], function (prop) {
-          get$1(metaData, prop).orThunk(function () {
-            return get$1(dims, prop);
-          }).each(function (value) {
-            return dimensions[prop] = value;
-          });
-        });
-      });
-      return dimensions;
-    };
-    var unwrap = function (data, sourceInput) {
-      var metaData = sourceInput ? extractMeta(sourceInput, data).getOr({}) : {};
-      var get = getValue(data, metaData, sourceInput);
-      return __assign(__assign(__assign(__assign(__assign({}, get('source')), get('altsource')), get('poster')), get('embed')), getDimensions(data, metaData));
-    };
-    var wrap = function (data) {
-      var wrapped = __assign(__assign({}, data), {
-        source: { value: get$1(data, 'source').getOr('') },
-        altsource: { value: get$1(data, 'altsource').getOr('') },
-        poster: { value: get$1(data, 'poster').getOr('') }
-      });
-      each$1([
-        'width',
-        'height'
-      ], function (prop) {
-        get$1(data, prop).each(function (value) {
-          var dimensions = wrapped.dimensions || {};
-          dimensions[prop] = value;
-          wrapped.dimensions = dimensions;
-        });
-      });
-      return wrapped;
-    };
-    var handleError = function (editor) {
-      return function (error) {
-        var errorMessage = error && error.msg ? 'Media embed handler error: ' + error.msg : 'Media embed handler threw unknown error.';
-        editor.notificationManager.open({
-          type: 'error',
-          text: errorMessage
-        });
-      };
-    };
-    var snippetToData = function (editor, embedSnippet) {
-      return htmlToData(getScripts(editor), embedSnippet);
-    };
-    var getEditorData = function (editor) {
-      var element = editor.selection.getNode();
-      var snippet = isMediaElement(element) ? editor.serializer.serialize(element, { selection: true }) : '';
-      return __assign({ embed: snippet }, htmlToData(getScripts(editor), snippet));
-    };
-    var addEmbedHtml = function (api, editor) {
-      return function (response) {
-        if (isString(response.url) && response.url.trim().length > 0) {
-          var html = response.html;
-          var snippetData = snippetToData(editor, html);
-          var nuData = __assign(__assign({}, snippetData), {
-            source: response.url,
-            embed: html
-          });
-          api.setData(wrap(nuData));
-        }
-      };
-    };
-    var selectPlaceholder = function (editor, beforeObjects) {
-      var afterObjects = editor.dom.select('*[data-mce-object]');
-      for (var i = 0; i < beforeObjects.length; i++) {
-        for (var y = afterObjects.length - 1; y >= 0; y--) {
-          if (beforeObjects[i] === afterObjects[y]) {
-            afterObjects.splice(y, 1);
-          }
+    var ancestor$1 = function (scope, predicate, isRoot) {
+      var element = scope.dom;
+      var stop = isFunction(isRoot) ? isRoot : never;
+      while (element.parentNode) {
+        element = element.parentNode;
+        var el = SugarElement.fromDom(element);
+        if (predicate(el)) {
+          return Optional.some(el);
+        } else if (stop(el)) {
+          break;
         }
       }
-      editor.selection.select(afterObjects[0]);
+      return Optional.none();
     };
-    var handleInsert = function (editor, html) {
-      var beforeObjects = editor.dom.select('*[data-mce-object]');
-      editor.insertContent(html);
-      selectPlaceholder(editor, beforeObjects);
-      editor.nodeChanged();
+    var closest$1 = function (scope, predicate, isRoot) {
+      var is = function (s, test) {
+        return test(s);
+      };
+      return ClosestOrAncestor(is, ancestor$1, scope, predicate, isRoot);
     };
-    var submitForm = function (prevData, newData, editor) {
-      newData.embed = updateHtml(newData.embed, newData);
-      if (newData.embed && (prevData.source === newData.source || isCached(newData.source))) {
-        handleInsert(editor, newData.embed);
-      } else {
-        getEmbedHtml(editor, newData).then(function (response) {
-          handleInsert(editor, response.html);
-        }).catch(handleError(editor));
+
+    var ancestor = function (scope, selector, isRoot) {
+      return ancestor$1(scope, function (e) {
+        return is(e, selector);
+      }, isRoot);
+    };
+    var closest = function (scope, selector, isRoot) {
+      var is$1 = function (element, selector) {
+        return is(element, selector);
+      };
+      return ClosestOrAncestor(is$1, ancestor, scope, selector, isRoot);
+    };
+
+    var validDefaultOrDie = function (value, predicate) {
+      if (predicate(value)) {
+        return true;
       }
+      throw new Error('Default value doesn\'t match requested type.');
     };
-    var showDialog = function (editor) {
-      var editorData = getEditorData(editor);
-      var currentData = Cell(editorData);
-      var initialData = wrap(editorData);
-      var handleSource = function (prevData, api) {
-        var serviceData = unwrap(api.getData(), 'source');
-        if (prevData.source !== serviceData.source) {
-          addEmbedHtml(win, editor)({
-            url: serviceData.source,
-            html: ''
-          });
-          getEmbedHtml(editor, serviceData).then(addEmbedHtml(win, editor)).catch(handleError(editor));
-        }
-      };
-      var handleEmbed = function (api) {
-        var data = unwrap(api.getData());
-        var dataFromEmbed = snippetToData(editor, data.embed);
-        api.setData(wrap(dataFromEmbed));
-      };
-      var handleUpdate = function (api, sourceInput) {
-        var data = unwrap(api.getData(), sourceInput);
-        var embed = dataToHtml(editor, data);
-        api.setData(wrap(__assign(__assign({}, data), { embed: embed })));
-      };
-      var mediaInput = [{
-          name: 'source',
-          type: 'urlinput',
-          filetype: 'media',
-          label: 'Source'
-        }];
-      var sizeInput = !hasDimensions(editor) ? [] : [{
-          type: 'sizeinput',
-          name: 'dimensions',
-          label: 'Constrain proportions',
-          constrain: true
-        }];
-      var generalTab = {
-        title: 'General',
-        name: 'general',
-        items: flatten([
-          mediaInput,
-          sizeInput
-        ])
-      };
-      var embedTextarea = {
-        type: 'textarea',
-        name: 'embed',
-        label: 'Paste your embed code below:'
-      };
-      var embedTab = {
-        title: 'Embed',
-        items: [embedTextarea]
-      };
-      var advancedFormItems = [];
-      if (hasAltSource(editor)) {
-        advancedFormItems.push({
-          name: 'altsource',
-          type: 'urlinput',
-          filetype: 'media',
-          label: 'Alternative source URL'
-        });
+    var items = function (value, defaultValue) {
+      if (isArray(value) || isObject(value)) {
+        throw new Error('expected a string but found: ' + value);
       }
-      if (hasPoster(editor)) {
-        advancedFormItems.push({
-          name: 'poster',
-          type: 'urlinput',
-          filetype: 'image',
-          label: 'Media poster (Image URL)'
-        });
-      }
-      var advancedTab = {
-        title: 'Advanced',
-        name: 'advanced',
-        items: advancedFormItems
-      };
-      var tabs = [
-        generalTab,
-        embedTab
-      ];
-      if (advancedFormItems.length > 0) {
-        tabs.push(advancedTab);
-      }
-      var body = {
-        type: 'tabpanel',
-        tabs: tabs
-      };
-      var win = editor.windowManager.open({
-        title: 'Insert/Edit Media',
-        size: 'normal',
-        body: body,
-        buttons: [
-          {
-            type: 'cancel',
-            name: 'cancel',
-            text: 'Cancel'
-          },
-          {
-            type: 'submit',
-            name: 'save',
-            text: 'Save',
-            primary: true
-          }
-        ],
-        onSubmit: function (api) {
-          var serviceData = unwrap(api.getData());
-          submitForm(currentData.get(), serviceData, editor);
-          api.close();
-        },
-        onChange: function (api, detail) {
-          switch (detail.name) {
-          case 'source':
-            handleSource(currentData.get(), api);
-            break;
-          case 'embed':
-            handleEmbed(api);
-            break;
-          case 'dimensions':
-          case 'altsource':
-          case 'poster':
-            handleUpdate(api, detail.name);
-            break;
-          }
-          currentData.set(unwrap(api.getData()));
-        },
-        initialData: initialData
-      });
-    };
-
-    var get = function (editor) {
-      var showDialog$1 = function () {
-        showDialog(editor);
-      };
-      return { showDialog: showDialog$1 };
-    };
-
-    var register$1 = function (editor) {
-      var showDialog$1 = function () {
-        showDialog(editor);
-      };
-      editor.addCommand('mceMedia', showDialog$1);
-    };
-
-    var global$2 = tinymce.util.Tools.resolve('tinymce.html.Node');
-
-    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
-
-    var global = tinymce.util.Tools.resolve('tinymce.html.DomParser');
-
-    var sanitize = function (editor, html) {
-      if (shouldFilterHtml(editor) === false) {
-        return html;
-      }
-      var writer = global$4();
-      var blocked;
-      global$6({
-        validate: false,
-        allow_conditional_comments: false,
-        comment: function (text) {
-          if (!blocked) {
-            writer.comment(text);
-          }
-        },
-        cdata: function (text) {
-          if (!blocked) {
-            writer.cdata(text);
-          }
-        },
-        text: function (text, raw) {
-          if (!blocked) {
-            writer.text(text, raw);
-          }
-        },
-        start: function (name, attrs, empty) {
-          blocked = true;
-          if (name === 'script' || name === 'noscript' || name === 'svg') {
-            return;
-          }
-          for (var i = attrs.length - 1; i >= 0; i--) {
-            var attrName = attrs[i].name;
-            if (attrName.indexOf('on') === 0) {
-              delete attrs.map[attrName];
-              attrs.splice(i, 1);
-            }
-            if (attrName === 'style') {
-              attrs[i].value = editor.dom.serializeStyle(editor.dom.parseStyle(attrs[i].value), name);
-            }
-          }
-          writer.start(name, attrs, empty);
-          blocked = false;
-        },
-        end: function (name) {
-          if (blocked) {
-            return;
-          }
-          writer.end(name);
-        }
-      }, global$5({})).parse(html);
-      return writer.getContent();
-    };
-
-    var isLiveEmbedNode = function (node) {
-      var name = node.name;
-      return name === 'iframe' || name === 'video' || name === 'audio';
-    };
-    var getDimension = function (node, styles, dimension, defaultValue) {
-      if (defaultValue === void 0) {
-        defaultValue = null;
-      }
-      var value = node.attr(dimension);
-      if (isNonNullable(value)) {
-        return value;
-      } else if (!has(styles, dimension)) {
+      if (isUndefined(value)) {
         return defaultValue;
-      } else {
-        return null;
       }
-    };
-    var setDimensions = function (node, previewNode, styles) {
-      var useDefaults = previewNode.name === 'img' || node.name === 'video';
-      var defaultWidth = useDefaults ? '300' : null;
-      var fallbackHeight = node.name === 'audio' ? '30' : '150';
-      var defaultHeight = useDefaults ? fallbackHeight : null;
-      previewNode.attr({
-        width: getDimension(node, styles, 'width', defaultWidth),
-        height: getDimension(node, styles, 'height', defaultHeight)
-      });
-    };
-    var appendNodeContent = function (editor, nodeName, previewNode, html) {
-      var newNode = global({
-        forced_root_block: false,
-        validate: false
-      }, editor.schema).parse(html, { context: nodeName });
-      while (newNode.firstChild) {
-        previewNode.append(newNode.firstChild);
+      if (isBoolean(value)) {
+        return value === false ? '' : defaultValue;
       }
+      return value;
     };
-    var createPlaceholderNode = function (editor, node) {
-      var name = node.name;
-      var placeHolder = new global$2('img', 1);
-      placeHolder.shortEnded = true;
-      retainAttributesAndInnerHtml(editor, node, placeHolder);
-      setDimensions(node, placeHolder, {});
-      placeHolder.attr({
-        'style': node.attr('style'),
-        'src': global$1.transparentSrc,
-        'data-mce-object': name,
-        'class': 'mce-object mce-object-' + name
-      });
-      return placeHolder;
-    };
-    var createPreviewNode = function (editor, node) {
-      var name = node.name;
-      var previewWrapper = new global$2('span', 1);
-      previewWrapper.attr({
-        'contentEditable': 'false',
-        'style': node.attr('style'),
-        'data-mce-object': name,
-        'class': 'mce-preview-object mce-object-' + name
-      });
-      retainAttributesAndInnerHtml(editor, node, previewWrapper);
-      var styles = editor.dom.parseStyle(node.attr('style'));
-      var previewNode = new global$2(name, 1);
-      setDimensions(node, previewNode, styles);
-      previewNode.attr({
-        src: node.attr('src'),
-        style: node.attr('style'),
-        class: node.attr('class')
-      });
-      if (name === 'iframe') {
-        previewNode.attr({
-          allowfullscreen: node.attr('allowfullscreen'),
-          frameborder: '0'
-        });
-      } else {
-        var attrs = [
-          'controls',
-          'crossorigin',
-          'currentTime',
-          'loop',
-          'muted',
-          'poster',
-          'preload'
-        ];
-        each$1(attrs, function (attrName) {
-          previewNode.attr(attrName, node.attr(attrName));
-        });
-        var sanitizedHtml = previewWrapper.attr('data-mce-html');
-        if (isNonNullable(sanitizedHtml)) {
-          appendNodeContent(editor, name, previewNode, unescape(sanitizedHtml));
-        }
-      }
-      var shimNode = new global$2('span', 1);
-      shimNode.attr('class', 'mce-shim');
-      previewWrapper.append(previewNode);
-      previewWrapper.append(shimNode);
-      return previewWrapper;
-    };
-    var retainAttributesAndInnerHtml = function (editor, sourceNode, targetNode) {
-      var attribs = sourceNode.attributes;
-      var ai = attribs.length;
-      while (ai--) {
-        var attrName = attribs[ai].name;
-        var attrValue = attribs[ai].value;
-        if (attrName !== 'width' && attrName !== 'height' && attrName !== 'style') {
-          if (attrName === 'data' || attrName === 'src') {
-            attrValue = editor.convertURL(attrValue, attrName);
-          }
-          targetNode.attr('data-mce-p-' + attrName, attrValue);
-        }
-      }
-      var innerHtml = sourceNode.firstChild && sourceNode.firstChild.value;
-      if (innerHtml) {
-        targetNode.attr('data-mce-html', escape(sanitize(editor, innerHtml)));
-        targetNode.firstChild = null;
-      }
-    };
-    var isPageEmbedWrapper = function (node) {
-      var nodeClass = node.attr('class');
-      return nodeClass && /\btiny-pageembed\b/.test(nodeClass);
-    };
-    var isWithinEmbedWrapper = function (node) {
-      while (node = node.parent) {
-        if (node.attr('data-ephox-embed-iri') || isPageEmbedWrapper(node)) {
-          return true;
-        }
-      }
-      return false;
-    };
-    var placeHolderConverter = function (editor) {
-      return function (nodes) {
-        var i = nodes.length;
-        var node;
-        var videoScript;
-        while (i--) {
-          node = nodes[i];
-          if (!node.parent) {
-            continue;
-          }
-          if (node.parent.attr('data-mce-object')) {
-            continue;
-          }
-          if (node.name === 'script') {
-            videoScript = getVideoScriptMatch(getScripts(editor), node.attr('src'));
-            if (!videoScript) {
-              continue;
-            }
-          }
-          if (videoScript) {
-            if (videoScript.width) {
-              node.attr('width', videoScript.width.toString());
-            }
-            if (videoScript.height) {
-              node.attr('height', videoScript.height.toString());
-            }
-          }
-          if (isLiveEmbedNode(node) && hasLiveEmbeds(editor) && global$1.ceFalse) {
-            if (!isWithinEmbedWrapper(node)) {
-              node.replace(createPreviewNode(editor, node));
-            }
-          } else {
-            if (!isWithinEmbedWrapper(node)) {
-              node.replace(createPlaceholderNode(editor, node));
-            }
-          }
-        }
+    var getToolbarItemsOr_ = function (predicate) {
+      return function (editor, name, defaultValue) {
+        validDefaultOrDie(defaultValue, predicate);
+        var value = editor.getParam(name, defaultValue);
+        return items(value, defaultValue);
       };
     };
+    var getToolbarItemsOr = getToolbarItemsOr_(isString);
 
-    var setup$1 = function (editor) {
-      editor.on('preInit', function () {
-        var specialElements = editor.schema.getSpecialElements();
-        global$8.each('video audio iframe object'.split(' '), function (name) {
-          specialElements[name] = new RegExp('</' + name + '[^>]*>', 'gi');
-        });
-        var boolAttrs = editor.schema.getBoolAttrs();
-        global$8.each('webkitallowfullscreen mozallowfullscreen allowfullscreen'.split(' '), function (name) {
-          boolAttrs[name] = {};
-        });
-        editor.parser.addNodeFilter('iframe,video,audio,object,embed,script', placeHolderConverter(editor));
-        editor.serializer.addAttributeFilter('data-mce-object', function (nodes, name) {
-          var i = nodes.length;
-          var node;
-          var realElm;
-          var ai;
-          var attribs;
-          var innerHtml;
-          var innerNode;
-          var realElmName;
-          var className;
-          while (i--) {
-            node = nodes[i];
-            if (!node.parent) {
-              continue;
-            }
-            realElmName = node.attr(name);
-            realElm = new global$2(realElmName, 1);
-            if (realElmName !== 'audio' && realElmName !== 'script') {
-              className = node.attr('class');
-              if (className && className.indexOf('mce-preview-object') !== -1) {
-                realElm.attr({
-                  width: node.firstChild.attr('width'),
-                  height: node.firstChild.attr('height')
-                });
-              } else {
-                realElm.attr({
-                  width: node.attr('width'),
-                  height: node.attr('height')
-                });
-              }
-            }
-            realElm.attr({ style: node.attr('style') });
-            attribs = node.attributes;
-            ai = attribs.length;
-            while (ai--) {
-              var attrName = attribs[ai].name;
-              if (attrName.indexOf('data-mce-p-') === 0) {
-                realElm.attr(attrName.substr(11), attribs[ai].value);
-              }
-            }
-            if (realElmName === 'script') {
-              realElm.attr('type', 'text/javascript');
-            }
-            innerHtml = node.attr('data-mce-html');
-            if (innerHtml) {
-              innerNode = new global$2('#text', 3);
-              innerNode.raw = true;
-              innerNode.value = sanitize(editor, unescape(innerHtml));
-              realElm.append(innerNode);
-            }
-            node.replace(realElm);
-          }
-        });
-      });
-      editor.on('SetContent', function () {
-        editor.$('span.mce-preview-object').each(function (index, elm) {
-          var $elm = editor.$(elm);
-          if ($elm.find('span.mce-shim').length === 0) {
-            $elm.append('<span class="mce-shim"></span>');
-          }
-        });
-      });
+    var getTextSelectionToolbarItems = function (editor) {
+      return getToolbarItemsOr(editor, 'quickbars_selection_toolbar', 'bold italic | quicklink h2 h3 blockquote');
+    };
+    var getInsertToolbarItems = function (editor) {
+      return getToolbarItemsOr(editor, 'quickbars_insert_toolbar', 'quickimage quicktable');
+    };
+    var getImageToolbarItems = function (editor) {
+      return getToolbarItemsOr(editor, 'quickbars_image_toolbar', 'alignleft aligncenter alignright');
     };
 
-    var setup = function (editor) {
-      editor.on('ResolveName', function (e) {
-        var name;
-        if (e.target.nodeType === 1 && (name = e.target.getAttribute('data-mce-object'))) {
-          e.name = name;
-        }
-      });
+    var addToEditor$1 = function (editor) {
+      var insertToolbarItems = getInsertToolbarItems(editor);
+      if (insertToolbarItems.trim().length > 0) {
+        editor.ui.registry.addContextToolbar('quickblock', {
+          predicate: function (node) {
+            var sugarNode = SugarElement.fromDom(node);
+            var textBlockElementsMap = editor.schema.getTextBlockElements();
+            var isRoot = function (elem) {
+              return elem.dom === editor.getBody();
+            };
+            return closest(sugarNode, 'table', isRoot).fold(function () {
+              return closest$1(sugarNode, function (elem) {
+                return name(elem) in textBlockElementsMap && editor.dom.isEmpty(elem.dom);
+              }, isRoot).isSome();
+            }, never);
+          },
+          items: insertToolbarItems,
+          position: 'line',
+          scope: 'editor'
+        });
+      }
     };
 
-    var register = function (editor) {
-      var onAction = function () {
-        return editor.execCommand('mceMedia');
+    var addToEditor = function (editor) {
+      var isEditable = function (node) {
+        return editor.dom.getContentEditableParent(node) !== 'false';
       };
-      editor.ui.registry.addToggleButton('media', {
-        tooltip: 'Insert/edit media',
-        icon: 'embed',
-        onAction: onAction,
-        onSetup: function (buttonApi) {
-          var selection = editor.selection;
-          buttonApi.setActive(isMediaElement(selection.getNode()));
-          return selection.selectorChangedWithUnbind('img[data-mce-object],span[data-mce-object],div[data-ephox-embed-iri]', buttonApi.setActive).unbind;
-        }
-      });
-      editor.ui.registry.addMenuItem('media', {
-        icon: 'embed',
-        text: 'Media...',
-        onAction: onAction
-      });
+      var isImage = function (node) {
+        return node.nodeName === 'IMG' || node.nodeName === 'FIGURE' && /image/i.test(node.className);
+      };
+      var imageToolbarItems = getImageToolbarItems(editor);
+      if (imageToolbarItems.trim().length > 0) {
+        editor.ui.registry.addContextToolbar('imageselection', {
+          predicate: isImage,
+          items: imageToolbarItems,
+          position: 'node'
+        });
+      }
+      var textToolbarItems = getTextSelectionToolbarItems(editor);
+      if (textToolbarItems.trim().length > 0) {
+        editor.ui.registry.addContextToolbar('textselection', {
+          predicate: function (node) {
+            return !isImage(node) && !editor.selection.isCollapsed() && isEditable(node);
+          },
+          items: textToolbarItems,
+          position: 'selection',
+          scope: 'editor'
+        });
+      }
     };
 
     function Plugin () {
-      global$9.add('media', function (editor) {
-        register$1(editor);
+      global$3.add('quickbars', function (editor) {
+        setupButtons(editor);
+        addToEditor$1(editor);
+        addToEditor(editor);
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.dom.DOMUtils');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var enableWhenDirty = function (editor) {
+      return editor.getParam('save_enablewhendirty', true);
+    };
+    var hasOnSaveCallback = function (editor) {
+      return !!editor.getParam('save_onsavecallback');
+    };
+    var hasOnCancelCallback = function (editor) {
+      return !!editor.getParam('save_oncancelcallback');
+    };
+
+    var displayErrorMessage = function (editor, message) {
+      editor.notificationManager.open({
+        text: message,
+        type: 'error'
+      });
+    };
+    var save = function (editor) {
+      var formObj = global$1.DOM.getParent(editor.id, 'form');
+      if (enableWhenDirty(editor) && !editor.isDirty()) {
+        return;
+      }
+      editor.save();
+      if (hasOnSaveCallback(editor)) {
+        editor.execCallback('save_onsavecallback', editor);
+        editor.nodeChanged();
+        return;
+      }
+      if (formObj) {
+        editor.setDirty(false);
+        if (!formObj.onsubmit || formObj.onsubmit()) {
+          if (typeof formObj.submit === 'function') {
+            formObj.submit();
+          } else {
+            displayErrorMessage(editor, 'Error: Form submit field collision.');
+          }
+        }
+        editor.nodeChanged();
+      } else {
+        displayErrorMessage(editor, 'Error: No form element found.');
+      }
+    };
+    var cancel = function (editor) {
+      var h = global.trim(editor.startContent);
+      if (hasOnCancelCallback(editor)) {
+        editor.execCallback('save_oncancelcallback', editor);
+        return;
+      }
+      editor.resetContent(h);
+    };
+
+    var register$1 = function (editor) {
+      editor.addCommand('mceSave', function () {
+        save(editor);
+      });
+      editor.addCommand('mceCancel', function () {
+        cancel(editor);
+      });
+    };
+
+    var stateToggle = function (editor) {
+      return function (api) {
+        var handler = function () {
+          api.setDisabled(enableWhenDirty(editor) && !editor.isDirty());
+        };
+        handler();
+        editor.on('NodeChange dirty', handler);
+        return function () {
+          return editor.off('NodeChange dirty', handler);
+        };
+      };
+    };
+    var register = function (editor) {
+      editor.ui.registry.addButton('save', {
+        icon: 'save',
+        tooltip: 'Save',
+        disabled: true,
+        onAction: function () {
+          return editor.execCommand('mceSave');
+        },
+        onSetup: stateToggle(editor)
+      });
+      editor.ui.registry.addButton('cancel', {
+        icon: 'cancel',
+        tooltip: 'Cancel',
+        disabled: true,
+        onAction: function () {
+          return editor.execCommand('mceCancel');
+        },
+        onSetup: stateToggle(editor)
+      });
+      editor.addShortcut('Meta+S', '', 'mceSave');
+    };
+
+    function Plugin () {
+      global$2.add('save', function (editor) {
         register(editor);
-        setup(editor);
-        setup$1(editor);
-        setup$2(editor);
-        return get(editor);
+        register$1(editor);
       });
     }
 
@@ -67532,612 +68060,6 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$6 = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var global$5 = tinymce.util.Tools.resolve('tinymce.dom.DOMUtils');
-
-    var global$4 = tinymce.util.Tools.resolve('tinymce.EditorManager');
-
-    var global$3 = tinymce.util.Tools.resolve('tinymce.Env');
-
-    var global$2 = tinymce.util.Tools.resolve('tinymce.util.Delay');
-
-    var global$1 = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.VK');
-
-    var getTabFocusElements = function (editor) {
-      return editor.getParam('tabfocus_elements', ':prev,:next');
-    };
-    var getTabFocus = function (editor) {
-      return editor.getParam('tab_focus', getTabFocusElements(editor));
-    };
-
-    var DOM = global$5.DOM;
-    var tabCancel = function (e) {
-      if (e.keyCode === global.TAB && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        e.preventDefault();
-      }
-    };
-    var setup = function (editor) {
-      var tabHandler = function (e) {
-        var x;
-        if (e.keyCode !== global.TAB || e.ctrlKey || e.altKey || e.metaKey || e.isDefaultPrevented()) {
-          return;
-        }
-        var find = function (direction) {
-          var el = DOM.select(':input:enabled,*[tabindex]:not(iframe)');
-          var canSelectRecursive = function (e) {
-            var castElem = e;
-            return e.nodeName === 'BODY' || castElem.type !== 'hidden' && castElem.style.display !== 'none' && castElem.style.visibility !== 'hidden' && canSelectRecursive(e.parentNode);
-          };
-          var canSelect = function (el) {
-            return /INPUT|TEXTAREA|BUTTON/.test(el.tagName) && global$4.get(e.id) && el.tabIndex !== -1 && canSelectRecursive(el);
-          };
-          global$1.each(el, function (e, i) {
-            if (e.id === editor.id) {
-              x = i;
-              return false;
-            }
-          });
-          if (direction > 0) {
-            for (var i = x + 1; i < el.length; i++) {
-              if (canSelect(el[i])) {
-                return el[i];
-              }
-            }
-          } else {
-            for (var i = x - 1; i >= 0; i--) {
-              if (canSelect(el[i])) {
-                return el[i];
-              }
-            }
-          }
-          return null;
-        };
-        var v = global$1.explode(getTabFocus(editor));
-        if (v.length === 1) {
-          v[1] = v[0];
-          v[0] = ':prev';
-        }
-        var el;
-        if (e.shiftKey) {
-          if (v[0] === ':prev') {
-            el = find(-1);
-          } else {
-            el = DOM.get(v[0]);
-          }
-        } else {
-          if (v[1] === ':next') {
-            el = find(1);
-          } else {
-            el = DOM.get(v[1]);
-          }
-        }
-        if (el) {
-          var focusEditor = global$4.get(el.id || el.name);
-          if (el.id && focusEditor) {
-            focusEditor.focus();
-          } else {
-            global$2.setTimeout(function () {
-              if (!global$3.webkit) {
-                window.focus();
-              }
-              el.focus();
-            }, 10);
-          }
-          e.preventDefault();
-        }
-      };
-      editor.on('init', function () {
-        if (editor.inline) {
-          DOM.setAttrib(editor.getBody(), 'tabIndex', null);
-        }
-        editor.on('keyup', tabCancel);
-        if (global$3.gecko) {
-          editor.on('keypress keydown', tabHandler);
-        } else {
-          editor.on('keydown', tabHandler);
-        }
-      });
-    };
-
-    function Plugin () {
-      global$6.add('tabfocus', function (editor) {
-        setup(editor);
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
-    var global$3 = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var unique = 0;
-    var generate = function (prefix) {
-      var date = new Date();
-      var time = date.getTime();
-      var random = Math.floor(Math.random() * 1000000000);
-      unique++;
-      return prefix + '_' + random + unique + String(time);
-    };
-
-    var createTableHtml = function (cols, rows) {
-      var html = '<table data-mce-id="mce" style="width: 100%">';
-      html += '<tbody>';
-      for (var y = 0; y < rows; y++) {
-        html += '<tr>';
-        for (var x = 0; x < cols; x++) {
-          html += '<td><br></td>';
-        }
-        html += '</tr>';
-      }
-      html += '</tbody>';
-      html += '</table>';
-      return html;
-    };
-    var getInsertedElement = function (editor) {
-      var elms = editor.dom.select('*[data-mce-id]');
-      return elms[0];
-    };
-    var insertTableHtml = function (editor, cols, rows) {
-      editor.undoManager.transact(function () {
-        editor.insertContent(createTableHtml(cols, rows));
-        var tableElm = getInsertedElement(editor);
-        tableElm.removeAttribute('data-mce-id');
-        var cellElm = editor.dom.select('td,th', tableElm);
-        editor.selection.setCursorLocation(cellElm[0], 0);
-      });
-    };
-    var insertTable = function (editor, cols, rows) {
-      editor.plugins.table ? editor.plugins.table.insertTable(cols, rows) : insertTableHtml(editor, cols, rows);
-    };
-    var insertBlob = function (editor, base64, blob) {
-      var blobCache = editor.editorUpload.blobCache;
-      var blobInfo = blobCache.create(generate('mceu'), blob, base64);
-      blobCache.add(blobInfo);
-      editor.insertContent(editor.dom.createHTML('img', { src: blobInfo.blobUri() }));
-    };
-
-    var global$2 = tinymce.util.Tools.resolve('tinymce.util.Promise');
-
-    var blobToBase64 = function (blob) {
-      return new global$2(function (resolve) {
-        var reader = new FileReader();
-        reader.onloadend = function () {
-          resolve(reader.result.split(',')[1]);
-        };
-        reader.readAsDataURL(blob);
-      });
-    };
-
-    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.Delay');
-
-    var pickFile = function (editor) {
-      return new global$2(function (resolve) {
-        var fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = 'image/*';
-        fileInput.style.position = 'fixed';
-        fileInput.style.left = '0';
-        fileInput.style.top = '0';
-        fileInput.style.opacity = '0.001';
-        document.body.appendChild(fileInput);
-        var changeHandler = function (e) {
-          resolve(Array.prototype.slice.call(e.target.files));
-        };
-        fileInput.addEventListener('change', changeHandler);
-        var cancelHandler = function (e) {
-          var cleanup = function () {
-            resolve([]);
-            fileInput.parentNode.removeChild(fileInput);
-          };
-          if (global$1.os.isAndroid() && e.type !== 'remove') {
-            global.setEditorTimeout(editor, cleanup, 0);
-          } else {
-            cleanup();
-          }
-          editor.off('focusin remove', cancelHandler);
-        };
-        editor.on('focusin remove', cancelHandler);
-        fileInput.click();
-      });
-    };
-
-    var setupButtons = function (editor) {
-      editor.ui.registry.addButton('quickimage', {
-        icon: 'image',
-        tooltip: 'Insert image',
-        onAction: function () {
-          pickFile(editor).then(function (files) {
-            if (files.length > 0) {
-              var blob_1 = files[0];
-              blobToBase64(blob_1).then(function (base64) {
-                insertBlob(editor, base64, blob_1);
-              });
-            }
-          });
-        }
-      });
-      editor.ui.registry.addButton('quicktable', {
-        icon: 'table',
-        tooltip: 'Insert table',
-        onAction: function () {
-          insertTable(editor, 2, 2);
-        }
-      });
-    };
-
-    var typeOf = function (x) {
-      var t = typeof x;
-      if (x === null) {
-        return 'null';
-      } else if (t === 'object' && (Array.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'Array')) {
-        return 'array';
-      } else if (t === 'object' && (String.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'String')) {
-        return 'string';
-      } else {
-        return t;
-      }
-    };
-    var isType = function (type) {
-      return function (value) {
-        return typeOf(value) === type;
-      };
-    };
-    var isSimpleType = function (type) {
-      return function (value) {
-        return typeof value === type;
-      };
-    };
-    var eq = function (t) {
-      return function (a) {
-        return t === a;
-      };
-    };
-    var isString = isType('string');
-    var isObject = isType('object');
-    var isArray = isType('array');
-    var isBoolean = isSimpleType('boolean');
-    var isUndefined = eq(undefined);
-    var isFunction = isSimpleType('function');
-
-    var noop = function () {
-    };
-    var constant = function (value) {
-      return function () {
-        return value;
-      };
-    };
-    var identity = function (x) {
-      return x;
-    };
-    var never = constant(false);
-    var always = constant(true);
-
-    var none = function () {
-      return NONE;
-    };
-    var NONE = function () {
-      var call = function (thunk) {
-        return thunk();
-      };
-      var id = identity;
-      var me = {
-        fold: function (n, _s) {
-          return n();
-        },
-        isSome: never,
-        isNone: always,
-        getOr: id,
-        getOrThunk: call,
-        getOrDie: function (msg) {
-          throw new Error(msg || 'error: getOrDie called on none.');
-        },
-        getOrNull: constant(null),
-        getOrUndefined: constant(undefined),
-        or: id,
-        orThunk: call,
-        map: none,
-        each: noop,
-        bind: none,
-        exists: never,
-        forall: always,
-        filter: function () {
-          return none();
-        },
-        toArray: function () {
-          return [];
-        },
-        toString: constant('none()')
-      };
-      return me;
-    }();
-    var some = function (a) {
-      var constant_a = constant(a);
-      var self = function () {
-        return me;
-      };
-      var bind = function (f) {
-        return f(a);
-      };
-      var me = {
-        fold: function (n, s) {
-          return s(a);
-        },
-        isSome: always,
-        isNone: never,
-        getOr: constant_a,
-        getOrThunk: constant_a,
-        getOrDie: constant_a,
-        getOrNull: constant_a,
-        getOrUndefined: constant_a,
-        or: self,
-        orThunk: self,
-        map: function (f) {
-          return some(f(a));
-        },
-        each: function (f) {
-          f(a);
-        },
-        bind: bind,
-        exists: bind,
-        forall: bind,
-        filter: function (f) {
-          return f(a) ? me : NONE;
-        },
-        toArray: function () {
-          return [a];
-        },
-        toString: function () {
-          return 'some(' + a + ')';
-        }
-      };
-      return me;
-    };
-    var from = function (value) {
-      return value === null || value === undefined ? NONE : some(value);
-    };
-    var Optional = {
-      some: some,
-      none: none,
-      from: from
-    };
-
-    function ClosestOrAncestor (is, ancestor, scope, a, isRoot) {
-      if (is(scope, a)) {
-        return Optional.some(scope);
-      } else if (isFunction(isRoot) && isRoot(scope)) {
-        return Optional.none();
-      } else {
-        return ancestor(scope, a, isRoot);
-      }
-    }
-
-    var ELEMENT = 1;
-
-    var fromHtml = function (html, scope) {
-      var doc = scope || document;
-      var div = doc.createElement('div');
-      div.innerHTML = html;
-      if (!div.hasChildNodes() || div.childNodes.length > 1) {
-        console.error('HTML does not have a single root node', html);
-        throw new Error('HTML must have a single root node');
-      }
-      return fromDom(div.childNodes[0]);
-    };
-    var fromTag = function (tag, scope) {
-      var doc = scope || document;
-      var node = doc.createElement(tag);
-      return fromDom(node);
-    };
-    var fromText = function (text, scope) {
-      var doc = scope || document;
-      var node = doc.createTextNode(text);
-      return fromDom(node);
-    };
-    var fromDom = function (node) {
-      if (node === null || node === undefined) {
-        throw new Error('Node cannot be null or undefined');
-      }
-      return { dom: node };
-    };
-    var fromPoint = function (docElm, x, y) {
-      return Optional.from(docElm.dom.elementFromPoint(x, y)).map(fromDom);
-    };
-    var SugarElement = {
-      fromHtml: fromHtml,
-      fromTag: fromTag,
-      fromText: fromText,
-      fromDom: fromDom,
-      fromPoint: fromPoint
-    };
-
-    var is = function (element, selector) {
-      var dom = element.dom;
-      if (dom.nodeType !== ELEMENT) {
-        return false;
-      } else {
-        var elem = dom;
-        if (elem.matches !== undefined) {
-          return elem.matches(selector);
-        } else if (elem.msMatchesSelector !== undefined) {
-          return elem.msMatchesSelector(selector);
-        } else if (elem.webkitMatchesSelector !== undefined) {
-          return elem.webkitMatchesSelector(selector);
-        } else if (elem.mozMatchesSelector !== undefined) {
-          return elem.mozMatchesSelector(selector);
-        } else {
-          throw new Error('Browser lacks native selectors');
-        }
-      }
-    };
-
-    typeof window !== 'undefined' ? window : Function('return this;')();
-
-    var name = function (element) {
-      var r = element.dom.nodeName;
-      return r.toLowerCase();
-    };
-
-    var ancestor$1 = function (scope, predicate, isRoot) {
-      var element = scope.dom;
-      var stop = isFunction(isRoot) ? isRoot : never;
-      while (element.parentNode) {
-        element = element.parentNode;
-        var el = SugarElement.fromDom(element);
-        if (predicate(el)) {
-          return Optional.some(el);
-        } else if (stop(el)) {
-          break;
-        }
-      }
-      return Optional.none();
-    };
-    var closest$1 = function (scope, predicate, isRoot) {
-      var is = function (s, test) {
-        return test(s);
-      };
-      return ClosestOrAncestor(is, ancestor$1, scope, predicate, isRoot);
-    };
-
-    var ancestor = function (scope, selector, isRoot) {
-      return ancestor$1(scope, function (e) {
-        return is(e, selector);
-      }, isRoot);
-    };
-    var closest = function (scope, selector, isRoot) {
-      var is$1 = function (element, selector) {
-        return is(element, selector);
-      };
-      return ClosestOrAncestor(is$1, ancestor, scope, selector, isRoot);
-    };
-
-    var validDefaultOrDie = function (value, predicate) {
-      if (predicate(value)) {
-        return true;
-      }
-      throw new Error('Default value doesn\'t match requested type.');
-    };
-    var items = function (value, defaultValue) {
-      if (isArray(value) || isObject(value)) {
-        throw new Error('expected a string but found: ' + value);
-      }
-      if (isUndefined(value)) {
-        return defaultValue;
-      }
-      if (isBoolean(value)) {
-        return value === false ? '' : defaultValue;
-      }
-      return value;
-    };
-    var getToolbarItemsOr_ = function (predicate) {
-      return function (editor, name, defaultValue) {
-        validDefaultOrDie(defaultValue, predicate);
-        var value = editor.getParam(name, defaultValue);
-        return items(value, defaultValue);
-      };
-    };
-    var getToolbarItemsOr = getToolbarItemsOr_(isString);
-
-    var getTextSelectionToolbarItems = function (editor) {
-      return getToolbarItemsOr(editor, 'quickbars_selection_toolbar', 'bold italic | quicklink h2 h3 blockquote');
-    };
-    var getInsertToolbarItems = function (editor) {
-      return getToolbarItemsOr(editor, 'quickbars_insert_toolbar', 'quickimage quicktable');
-    };
-    var getImageToolbarItems = function (editor) {
-      return getToolbarItemsOr(editor, 'quickbars_image_toolbar', 'alignleft aligncenter alignright');
-    };
-
-    var addToEditor$1 = function (editor) {
-      var insertToolbarItems = getInsertToolbarItems(editor);
-      if (insertToolbarItems.trim().length > 0) {
-        editor.ui.registry.addContextToolbar('quickblock', {
-          predicate: function (node) {
-            var sugarNode = SugarElement.fromDom(node);
-            var textBlockElementsMap = editor.schema.getTextBlockElements();
-            var isRoot = function (elem) {
-              return elem.dom === editor.getBody();
-            };
-            return closest(sugarNode, 'table', isRoot).fold(function () {
-              return closest$1(sugarNode, function (elem) {
-                return name(elem) in textBlockElementsMap && editor.dom.isEmpty(elem.dom);
-              }, isRoot).isSome();
-            }, never);
-          },
-          items: insertToolbarItems,
-          position: 'line',
-          scope: 'editor'
-        });
-      }
-    };
-
-    var addToEditor = function (editor) {
-      var isEditable = function (node) {
-        return editor.dom.getContentEditableParent(node) !== 'false';
-      };
-      var isImage = function (node) {
-        return node.nodeName === 'IMG' || node.nodeName === 'FIGURE' && /image/i.test(node.className);
-      };
-      var imageToolbarItems = getImageToolbarItems(editor);
-      if (imageToolbarItems.trim().length > 0) {
-        editor.ui.registry.addContextToolbar('imageselection', {
-          predicate: isImage,
-          items: imageToolbarItems,
-          position: 'node'
-        });
-      }
-      var textToolbarItems = getTextSelectionToolbarItems(editor);
-      if (textToolbarItems.trim().length > 0) {
-        editor.ui.registry.addContextToolbar('textselection', {
-          predicate: function (node) {
-            return !isImage(node) && !editor.selection.isCollapsed() && isEditable(node);
-          },
-          items: textToolbarItems,
-          position: 'selection',
-          scope: 'editor'
-        });
-      }
-    };
-
-    function Plugin () {
-      global$3.add('quickbars', function (editor) {
-        setupButtons(editor);
-        addToEditor$1(editor);
-        addToEditor(editor);
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
     var Cell = function (initial) {
       var value = initial;
       var get = function () {
@@ -68869,655 +68791,119 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
-    var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+    var global$6 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
-    var global = tinymce.util.Tools.resolve('tinymce.Env');
+    var global$5 = tinymce.util.Tools.resolve('tinymce.dom.DOMUtils');
 
-    var register$1 = function (editor) {
-      editor.addCommand('mcePrint', function () {
-        if (global.browser.isIE()) {
-          editor.getDoc().execCommand('print', false, null);
-        } else {
-          editor.getWin().print();
-        }
-      });
+    var global$4 = tinymce.util.Tools.resolve('tinymce.EditorManager');
+
+    var global$3 = tinymce.util.Tools.resolve('tinymce.Env');
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.util.Delay');
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.VK');
+
+    var getTabFocusElements = function (editor) {
+      return editor.getParam('tabfocus_elements', ':prev,:next');
+    };
+    var getTabFocus = function (editor) {
+      return editor.getParam('tab_focus', getTabFocusElements(editor));
     };
 
-    var register = function (editor) {
-      var onAction = function () {
-        return editor.execCommand('mcePrint');
-      };
-      editor.ui.registry.addButton('print', {
-        icon: 'print',
-        tooltip: 'Print',
-        onAction: onAction
-      });
-      editor.ui.registry.addMenuItem('print', {
-        text: 'Print...',
-        icon: 'print',
-        onAction: onAction
-      });
-    };
-
-    function Plugin () {
-      global$1.add('print', function (editor) {
-        register$1(editor);
-        register(editor);
-        editor.addShortcut('Meta+P', '', 'mcePrint');
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
-    var global$4 = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var typeOf = function (x) {
-      var t = typeof x;
-      if (x === null) {
-        return 'null';
-      } else if (t === 'object' && (Array.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'Array')) {
-        return 'array';
-      } else if (t === 'object' && (String.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'String')) {
-        return 'string';
-      } else {
-        return t;
+    var DOM = global$5.DOM;
+    var tabCancel = function (e) {
+      if (e.keyCode === global.TAB && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
       }
     };
-    var isType = function (type) {
-      return function (value) {
-        return typeOf(value) === type;
-      };
-    };
-    var isSimpleType = function (type) {
-      return function (value) {
-        return typeof value === type;
-      };
-    };
-    var isString = isType('string');
-    var isFunction = isSimpleType('function');
-
-    var noop = function () {
-    };
-    var constant = function (value) {
-      return function () {
-        return value;
-      };
-    };
-    var identity = function (x) {
-      return x;
-    };
-    function curry(fn) {
-      var initialArgs = [];
-      for (var _i = 1; _i < arguments.length; _i++) {
-        initialArgs[_i - 1] = arguments[_i];
-      }
-      return function () {
-        var restArgs = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-          restArgs[_i] = arguments[_i];
-        }
-        var all = initialArgs.concat(restArgs);
-        return fn.apply(null, all);
-      };
-    }
-    var never = constant(false);
-    var always = constant(true);
-
-    var global$3 = tinymce.util.Tools.resolve('tinymce.util.Tools');
-
-    var global$2 = tinymce.util.Tools.resolve('tinymce.util.XHR');
-
-    var getCreationDateClasses = function (editor) {
-      return editor.getParam('template_cdate_classes', 'cdate');
-    };
-    var getModificationDateClasses = function (editor) {
-      return editor.getParam('template_mdate_classes', 'mdate');
-    };
-    var getSelectedContentClasses = function (editor) {
-      return editor.getParam('template_selected_content_classes', 'selcontent');
-    };
-    var getPreviewReplaceValues = function (editor) {
-      return editor.getParam('template_preview_replace_values');
-    };
-    var getContentStyle = function (editor) {
-      return editor.getParam('content_style', '', 'string');
-    };
-    var shouldUseContentCssCors = function (editor) {
-      return editor.getParam('content_css_cors', false, 'boolean');
-    };
-    var getTemplateReplaceValues = function (editor) {
-      return editor.getParam('template_replace_values');
-    };
-    var getTemplates = function (editor) {
-      return editor.getParam('templates');
-    };
-    var getCdateFormat = function (editor) {
-      return editor.getParam('template_cdate_format', editor.translate('%Y-%m-%d'));
-    };
-    var getMdateFormat = function (editor) {
-      return editor.getParam('template_mdate_format', editor.translate('%Y-%m-%d'));
-    };
-    var getBodyClassFromHash = function (editor) {
-      var bodyClass = editor.getParam('body_class', '', 'hash');
-      return bodyClass[editor.id] || '';
-    };
-    var getBodyClass = function (editor) {
-      var bodyClass = editor.getParam('body_class', '', 'string');
-      if (bodyClass.indexOf('=') === -1) {
-        return bodyClass;
-      } else {
-        return getBodyClassFromHash(editor);
-      }
-    };
-
-    var addZeros = function (value, len) {
-      value = '' + value;
-      if (value.length < len) {
-        for (var i = 0; i < len - value.length; i++) {
-          value = '0' + value;
-        }
-      }
-      return value;
-    };
-    var getDateTime = function (editor, fmt, date) {
-      if (date === void 0) {
-        date = new Date();
-      }
-      var daysShort = 'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ');
-      var daysLong = 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday Sunday'.split(' ');
-      var monthsShort = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
-      var monthsLong = 'January February March April May June July August September October November December'.split(' ');
-      fmt = fmt.replace('%D', '%m/%d/%Y');
-      fmt = fmt.replace('%r', '%I:%M:%S %p');
-      fmt = fmt.replace('%Y', '' + date.getFullYear());
-      fmt = fmt.replace('%y', '' + date.getYear());
-      fmt = fmt.replace('%m', addZeros(date.getMonth() + 1, 2));
-      fmt = fmt.replace('%d', addZeros(date.getDate(), 2));
-      fmt = fmt.replace('%H', '' + addZeros(date.getHours(), 2));
-      fmt = fmt.replace('%M', '' + addZeros(date.getMinutes(), 2));
-      fmt = fmt.replace('%S', '' + addZeros(date.getSeconds(), 2));
-      fmt = fmt.replace('%I', '' + ((date.getHours() + 11) % 12 + 1));
-      fmt = fmt.replace('%p', '' + (date.getHours() < 12 ? 'AM' : 'PM'));
-      fmt = fmt.replace('%B', '' + editor.translate(monthsLong[date.getMonth()]));
-      fmt = fmt.replace('%b', '' + editor.translate(monthsShort[date.getMonth()]));
-      fmt = fmt.replace('%A', '' + editor.translate(daysLong[date.getDay()]));
-      fmt = fmt.replace('%a', '' + editor.translate(daysShort[date.getDay()]));
-      fmt = fmt.replace('%%', '%');
-      return fmt;
-    };
-
-    var createTemplateList = function (editor, callback) {
-      return function () {
-        var templateList = getTemplates(editor);
-        if (isFunction(templateList)) {
-          templateList(callback);
-        } else if (isString(templateList)) {
-          global$2.send({
-            url: templateList,
-            success: function (text) {
-              callback(JSON.parse(text));
-            }
-          });
-        } else {
-          callback(templateList);
-        }
-      };
-    };
-    var replaceTemplateValues = function (html, templateValues) {
-      global$3.each(templateValues, function (v, k) {
-        if (isFunction(v)) {
-          v = v(k);
-        }
-        html = html.replace(new RegExp('\\{\\$' + k + '\\}', 'g'), v);
-      });
-      return html;
-    };
-    var replaceVals = function (editor, scope) {
-      var dom = editor.dom, vl = getTemplateReplaceValues(editor);
-      global$3.each(dom.select('*', scope), function (e) {
-        global$3.each(vl, function (v, k) {
-          if (dom.hasClass(e, k)) {
-            if (isFunction(v)) {
-              v(e);
-            }
-          }
-        });
-      });
-    };
-    var hasClass = function (n, c) {
-      return new RegExp('\\b' + c + '\\b', 'g').test(n.className);
-    };
-    var insertTemplate = function (editor, _ui, html) {
-      var dom = editor.dom;
-      var sel = editor.selection.getContent();
-      html = replaceTemplateValues(html, getTemplateReplaceValues(editor));
-      var el = dom.create('div', null, html);
-      var n = dom.select('.mceTmpl', el);
-      if (n && n.length > 0) {
-        el = dom.create('div', null);
-        el.appendChild(n[0].cloneNode(true));
-      }
-      global$3.each(dom.select('*', el), function (n) {
-        if (hasClass(n, getCreationDateClasses(editor).replace(/\s+/g, '|'))) {
-          n.innerHTML = getDateTime(editor, getCdateFormat(editor));
-        }
-        if (hasClass(n, getModificationDateClasses(editor).replace(/\s+/g, '|'))) {
-          n.innerHTML = getDateTime(editor, getMdateFormat(editor));
-        }
-        if (hasClass(n, getSelectedContentClasses(editor).replace(/\s+/g, '|'))) {
-          n.innerHTML = sel;
-        }
-      });
-      replaceVals(editor, el);
-      editor.execCommand('mceInsertContent', false, el.innerHTML);
-      editor.addVisual();
-    };
-
-    var none = function () {
-      return NONE;
-    };
-    var NONE = function () {
-      var call = function (thunk) {
-        return thunk();
-      };
-      var id = identity;
-      var me = {
-        fold: function (n, _s) {
-          return n();
-        },
-        isSome: never,
-        isNone: always,
-        getOr: id,
-        getOrThunk: call,
-        getOrDie: function (msg) {
-          throw new Error(msg || 'error: getOrDie called on none.');
-        },
-        getOrNull: constant(null),
-        getOrUndefined: constant(undefined),
-        or: id,
-        orThunk: call,
-        map: none,
-        each: noop,
-        bind: none,
-        exists: never,
-        forall: always,
-        filter: function () {
-          return none();
-        },
-        toArray: function () {
-          return [];
-        },
-        toString: constant('none()')
-      };
-      return me;
-    }();
-    var some = function (a) {
-      var constant_a = constant(a);
-      var self = function () {
-        return me;
-      };
-      var bind = function (f) {
-        return f(a);
-      };
-      var me = {
-        fold: function (n, s) {
-          return s(a);
-        },
-        isSome: always,
-        isNone: never,
-        getOr: constant_a,
-        getOrThunk: constant_a,
-        getOrDie: constant_a,
-        getOrNull: constant_a,
-        getOrUndefined: constant_a,
-        or: self,
-        orThunk: self,
-        map: function (f) {
-          return some(f(a));
-        },
-        each: function (f) {
-          f(a);
-        },
-        bind: bind,
-        exists: bind,
-        forall: bind,
-        filter: function (f) {
-          return f(a) ? me : NONE;
-        },
-        toArray: function () {
-          return [a];
-        },
-        toString: function () {
-          return 'some(' + a + ')';
-        }
-      };
-      return me;
-    };
-    var from = function (value) {
-      return value === null || value === undefined ? NONE : some(value);
-    };
-    var Optional = {
-      some: some,
-      none: none,
-      from: from
-    };
-
-    var map = function (xs, f) {
-      var len = xs.length;
-      var r = new Array(len);
-      for (var i = 0; i < len; i++) {
-        var x = xs[i];
-        r[i] = f(x, i);
-      }
-      return r;
-    };
-    var findUntil = function (xs, pred, until) {
-      for (var i = 0, len = xs.length; i < len; i++) {
-        var x = xs[i];
-        if (pred(x, i)) {
-          return Optional.some(x);
-        } else if (until(x, i)) {
-          break;
-        }
-      }
-      return Optional.none();
-    };
-    var find = function (xs, pred) {
-      return findUntil(xs, pred, never);
-    };
-
-    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
-
-    var global = tinymce.util.Tools.resolve('tinymce.util.Promise');
-
-    var hasOwnProperty = Object.hasOwnProperty;
-    var get = function (obj, key) {
-      return has(obj, key) ? Optional.from(obj[key]) : Optional.none();
-    };
-    var has = function (obj, key) {
-      return hasOwnProperty.call(obj, key);
-    };
-
-    var entitiesAttr = {
-      '"': '&quot;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '&': '&amp;',
-      '\'': '&#039;'
-    };
-    var htmlEscape = function (html) {
-      return html.replace(/["'<>&]/g, function (match) {
-        return get(entitiesAttr, match).getOr(match);
-      });
-    };
-
-    var getPreviewContent = function (editor, html) {
-      if (html.indexOf('<html>') === -1) {
-        var contentCssEntries_1 = '';
-        var contentStyle = getContentStyle(editor);
-        var cors_1 = shouldUseContentCssCors(editor) ? ' crossorigin="anonymous"' : '';
-        global$3.each(editor.contentCSS, function (url) {
-          contentCssEntries_1 += '<link type="text/css" rel="stylesheet" href="' + editor.documentBaseURI.toAbsolute(url) + '"' + cors_1 + '>';
-        });
-        if (contentStyle) {
-          contentCssEntries_1 += '<style type="text/css">' + contentStyle + '</style>';
-        }
-        var bodyClass = getBodyClass(editor);
-        var encode = editor.dom.encode;
-        var isMetaKeyPressed = global$1.mac ? 'e.metaKey' : 'e.ctrlKey && !e.altKey';
-        var preventClicksOnLinksScript = '<script>' + 'document.addEventListener && document.addEventListener("click", function(e) {' + 'for (var elm = e.target; elm; elm = elm.parentNode) {' + 'if (elm.nodeName === "A" && !(' + isMetaKeyPressed + ')) {' + 'e.preventDefault();' + '}' + '}' + '}, false);' + '</script> ';
-        var directionality = editor.getBody().dir;
-        var dirAttr = directionality ? ' dir="' + encode(directionality) + '"' : '';
-        html = '<!DOCTYPE html>' + '<html>' + '<head>' + '<base href="' + encode(editor.documentBaseURI.getURI()) + '">' + contentCssEntries_1 + preventClicksOnLinksScript + '</head>' + '<body class="' + encode(bodyClass) + '"' + dirAttr + '>' + html + '</body>' + '</html>';
-      }
-      return replaceTemplateValues(html, getPreviewReplaceValues(editor));
-    };
-    var open = function (editor, templateList) {
-      var createTemplates = function () {
-        if (!templateList || templateList.length === 0) {
-          var message = editor.translate('No templates defined.');
-          editor.notificationManager.open({
-            text: message,
-            type: 'info'
-          });
-          return Optional.none();
-        }
-        return Optional.from(global$3.map(templateList, function (template, index) {
-          var isUrlTemplate = function (t) {
-            return t.url !== undefined;
-          };
-          return {
-            selected: index === 0,
-            text: template.title,
-            value: {
-              url: isUrlTemplate(template) ? Optional.from(template.url) : Optional.none(),
-              content: !isUrlTemplate(template) ? Optional.from(template.content) : Optional.none(),
-              description: template.description
-            }
-          };
-        }));
-      };
-      var createSelectBoxItems = function (templates) {
-        return map(templates, function (t) {
-          return {
-            text: t.text,
-            value: t.text
-          };
-        });
-      };
-      var findTemplate = function (templates, templateTitle) {
-        return find(templates, function (t) {
-          return t.text === templateTitle;
-        });
-      };
-      var loadFailedAlert = function (api) {
-        editor.windowManager.alert('Could not load the specified template.', function () {
-          return api.focus('template');
-        });
-      };
-      var getTemplateContent = function (t) {
-        return new global(function (resolve, reject) {
-          t.value.url.fold(function () {
-            return resolve(t.value.content.getOr(''));
-          }, function (url) {
-            return global$2.send({
-              url: url,
-              success: function (html) {
-                resolve(html);
-              },
-              error: function (e) {
-                reject(e);
-              }
-            });
-          });
-        });
-      };
-      var onChange = function (templates, updateDialog) {
-        return function (api, change) {
-          if (change.name === 'template') {
-            var newTemplateTitle = api.getData().template;
-            findTemplate(templates, newTemplateTitle).each(function (t) {
-              api.block('Loading...');
-              getTemplateContent(t).then(function (previewHtml) {
-                updateDialog(api, t, previewHtml);
-              }).catch(function () {
-                updateDialog(api, t, '');
-                api.disable('save');
-                loadFailedAlert(api);
-              });
-            });
-          }
-        };
-      };
-      var onSubmit = function (templates) {
-        return function (api) {
-          var data = api.getData();
-          findTemplate(templates, data.template).each(function (t) {
-            getTemplateContent(t).then(function (previewHtml) {
-              editor.execCommand('mceInsertTemplate', false, previewHtml);
-              api.close();
-            }).catch(function () {
-              api.disable('save');
-              loadFailedAlert(api);
-            });
-          });
-        };
-      };
-      var openDialog = function (templates) {
-        var selectBoxItems = createSelectBoxItems(templates);
-        var buildDialogSpec = function (bodyItems, initialData) {
-          return {
-            title: 'Insert Template',
-            size: 'large',
-            body: {
-              type: 'panel',
-              items: bodyItems
-            },
-            initialData: initialData,
-            buttons: [
-              {
-                type: 'cancel',
-                name: 'cancel',
-                text: 'Cancel'
-              },
-              {
-                type: 'submit',
-                name: 'save',
-                text: 'Save',
-                primary: true
-              }
-            ],
-            onSubmit: onSubmit(templates),
-            onChange: onChange(templates, updateDialog)
-          };
-        };
-        var updateDialog = function (dialogApi, template, previewHtml) {
-          var content = getPreviewContent(editor, previewHtml);
-          var bodyItems = [
-            {
-              type: 'selectbox',
-              name: 'template',
-              label: 'Templates',
-              items: selectBoxItems
-            },
-            {
-              type: 'htmlpanel',
-              html: '<p aria-live="polite">' + htmlEscape(template.value.description) + '</p>'
-            },
-            {
-              label: 'Preview',
-              type: 'iframe',
-              name: 'preview',
-              sandboxed: false
-            }
-          ];
-          var initialData = {
-            template: template.text,
-            preview: content
-          };
-          dialogApi.unblock();
-          dialogApi.redial(buildDialogSpec(bodyItems, initialData));
-          dialogApi.focus('template');
-        };
-        var dialogApi = editor.windowManager.open(buildDialogSpec([], {
-          template: '',
-          preview: ''
-        }));
-        dialogApi.block('Loading...');
-        getTemplateContent(templates[0]).then(function (previewHtml) {
-          updateDialog(dialogApi, templates[0], previewHtml);
-        }).catch(function () {
-          updateDialog(dialogApi, templates[0], '');
-          dialogApi.disable('save');
-          loadFailedAlert(dialogApi);
-        });
-      };
-      var optTemplates = createTemplates();
-      optTemplates.each(openDialog);
-    };
-
-    var showDialog = function (editor) {
-      return function (templates) {
-        open(editor, templates);
-      };
-    };
-    var register$1 = function (editor) {
-      editor.addCommand('mceInsertTemplate', curry(insertTemplate, editor));
-      editor.addCommand('mceTemplate', createTemplateList(editor, showDialog(editor)));
-    };
-
     var setup = function (editor) {
-      editor.on('PreProcess', function (o) {
-        var dom = editor.dom, dateFormat = getMdateFormat(editor);
-        global$3.each(dom.select('div', o.node), function (e) {
-          if (dom.hasClass(e, 'mceTmpl')) {
-            global$3.each(dom.select('*', e), function (e) {
-              if (dom.hasClass(e, getModificationDateClasses(editor).replace(/\s+/g, '|'))) {
-                e.innerHTML = getDateTime(editor, dateFormat);
+      var tabHandler = function (e) {
+        var x;
+        if (e.keyCode !== global.TAB || e.ctrlKey || e.altKey || e.metaKey || e.isDefaultPrevented()) {
+          return;
+        }
+        var find = function (direction) {
+          var el = DOM.select(':input:enabled,*[tabindex]:not(iframe)');
+          var canSelectRecursive = function (e) {
+            var castElem = e;
+            return e.nodeName === 'BODY' || castElem.type !== 'hidden' && castElem.style.display !== 'none' && castElem.style.visibility !== 'hidden' && canSelectRecursive(e.parentNode);
+          };
+          var canSelect = function (el) {
+            return /INPUT|TEXTAREA|BUTTON/.test(el.tagName) && global$4.get(e.id) && el.tabIndex !== -1 && canSelectRecursive(el);
+          };
+          global$1.each(el, function (e, i) {
+            if (e.id === editor.id) {
+              x = i;
+              return false;
+            }
+          });
+          if (direction > 0) {
+            for (var i = x + 1; i < el.length; i++) {
+              if (canSelect(el[i])) {
+                return el[i];
               }
-            });
-            replaceVals(editor, e);
+            }
+          } else {
+            for (var i = x - 1; i >= 0; i--) {
+              if (canSelect(el[i])) {
+                return el[i];
+              }
+            }
           }
-        });
-      });
-    };
-
-    var register = function (editor) {
-      var onAction = function () {
-        return editor.execCommand('mceTemplate');
+          return null;
+        };
+        var v = global$1.explode(getTabFocus(editor));
+        if (v.length === 1) {
+          v[1] = v[0];
+          v[0] = ':prev';
+        }
+        var el;
+        if (e.shiftKey) {
+          if (v[0] === ':prev') {
+            el = find(-1);
+          } else {
+            el = DOM.get(v[0]);
+          }
+        } else {
+          if (v[1] === ':next') {
+            el = find(1);
+          } else {
+            el = DOM.get(v[1]);
+          }
+        }
+        if (el) {
+          var focusEditor = global$4.get(el.id || el.name);
+          if (el.id && focusEditor) {
+            focusEditor.focus();
+          } else {
+            global$2.setTimeout(function () {
+              if (!global$3.webkit) {
+                window.focus();
+              }
+              el.focus();
+            }, 10);
+          }
+          e.preventDefault();
+        }
       };
-      editor.ui.registry.addButton('template', {
-        icon: 'template',
-        tooltip: 'Insert template',
-        onAction: onAction
-      });
-      editor.ui.registry.addMenuItem('template', {
-        icon: 'template',
-        text: 'Insert template...',
-        onAction: onAction
+      editor.on('init', function () {
+        if (editor.inline) {
+          DOM.setAttrib(editor.getBody(), 'tabIndex', null);
+        }
+        editor.on('keyup', tabCancel);
+        if (global$3.gecko) {
+          editor.on('keypress keydown', tabHandler);
+        } else {
+          editor.on('keydown', tabHandler);
+        }
       });
     };
 
     function Plugin () {
-      global$4.add('template', function (editor) {
-        register(editor);
-        register$1(editor);
+      global$6.add('tabfocus', function (editor) {
         setup(editor);
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
-    var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    function Plugin () {
-      global.add('textcolor', function () {
       });
     }
 
@@ -81047,6 +80433,620 @@ tinymce.IconManager.add('default', {
 (function () {
     'use strict';
 
+    var global$4 = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var typeOf = function (x) {
+      var t = typeof x;
+      if (x === null) {
+        return 'null';
+      } else if (t === 'object' && (Array.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'Array')) {
+        return 'array';
+      } else if (t === 'object' && (String.prototype.isPrototypeOf(x) || x.constructor && x.constructor.name === 'String')) {
+        return 'string';
+      } else {
+        return t;
+      }
+    };
+    var isType = function (type) {
+      return function (value) {
+        return typeOf(value) === type;
+      };
+    };
+    var isSimpleType = function (type) {
+      return function (value) {
+        return typeof value === type;
+      };
+    };
+    var isString = isType('string');
+    var isFunction = isSimpleType('function');
+
+    var noop = function () {
+    };
+    var constant = function (value) {
+      return function () {
+        return value;
+      };
+    };
+    var identity = function (x) {
+      return x;
+    };
+    function curry(fn) {
+      var initialArgs = [];
+      for (var _i = 1; _i < arguments.length; _i++) {
+        initialArgs[_i - 1] = arguments[_i];
+      }
+      return function () {
+        var restArgs = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+          restArgs[_i] = arguments[_i];
+        }
+        var all = initialArgs.concat(restArgs);
+        return fn.apply(null, all);
+      };
+    }
+    var never = constant(false);
+    var always = constant(true);
+
+    var global$3 = tinymce.util.Tools.resolve('tinymce.util.Tools');
+
+    var global$2 = tinymce.util.Tools.resolve('tinymce.util.XHR');
+
+    var getCreationDateClasses = function (editor) {
+      return editor.getParam('template_cdate_classes', 'cdate');
+    };
+    var getModificationDateClasses = function (editor) {
+      return editor.getParam('template_mdate_classes', 'mdate');
+    };
+    var getSelectedContentClasses = function (editor) {
+      return editor.getParam('template_selected_content_classes', 'selcontent');
+    };
+    var getPreviewReplaceValues = function (editor) {
+      return editor.getParam('template_preview_replace_values');
+    };
+    var getContentStyle = function (editor) {
+      return editor.getParam('content_style', '', 'string');
+    };
+    var shouldUseContentCssCors = function (editor) {
+      return editor.getParam('content_css_cors', false, 'boolean');
+    };
+    var getTemplateReplaceValues = function (editor) {
+      return editor.getParam('template_replace_values');
+    };
+    var getTemplates = function (editor) {
+      return editor.getParam('templates');
+    };
+    var getCdateFormat = function (editor) {
+      return editor.getParam('template_cdate_format', editor.translate('%Y-%m-%d'));
+    };
+    var getMdateFormat = function (editor) {
+      return editor.getParam('template_mdate_format', editor.translate('%Y-%m-%d'));
+    };
+    var getBodyClassFromHash = function (editor) {
+      var bodyClass = editor.getParam('body_class', '', 'hash');
+      return bodyClass[editor.id] || '';
+    };
+    var getBodyClass = function (editor) {
+      var bodyClass = editor.getParam('body_class', '', 'string');
+      if (bodyClass.indexOf('=') === -1) {
+        return bodyClass;
+      } else {
+        return getBodyClassFromHash(editor);
+      }
+    };
+
+    var addZeros = function (value, len) {
+      value = '' + value;
+      if (value.length < len) {
+        for (var i = 0; i < len - value.length; i++) {
+          value = '0' + value;
+        }
+      }
+      return value;
+    };
+    var getDateTime = function (editor, fmt, date) {
+      if (date === void 0) {
+        date = new Date();
+      }
+      var daysShort = 'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ');
+      var daysLong = 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday Sunday'.split(' ');
+      var monthsShort = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+      var monthsLong = 'January February March April May June July August September October November December'.split(' ');
+      fmt = fmt.replace('%D', '%m/%d/%Y');
+      fmt = fmt.replace('%r', '%I:%M:%S %p');
+      fmt = fmt.replace('%Y', '' + date.getFullYear());
+      fmt = fmt.replace('%y', '' + date.getYear());
+      fmt = fmt.replace('%m', addZeros(date.getMonth() + 1, 2));
+      fmt = fmt.replace('%d', addZeros(date.getDate(), 2));
+      fmt = fmt.replace('%H', '' + addZeros(date.getHours(), 2));
+      fmt = fmt.replace('%M', '' + addZeros(date.getMinutes(), 2));
+      fmt = fmt.replace('%S', '' + addZeros(date.getSeconds(), 2));
+      fmt = fmt.replace('%I', '' + ((date.getHours() + 11) % 12 + 1));
+      fmt = fmt.replace('%p', '' + (date.getHours() < 12 ? 'AM' : 'PM'));
+      fmt = fmt.replace('%B', '' + editor.translate(monthsLong[date.getMonth()]));
+      fmt = fmt.replace('%b', '' + editor.translate(monthsShort[date.getMonth()]));
+      fmt = fmt.replace('%A', '' + editor.translate(daysLong[date.getDay()]));
+      fmt = fmt.replace('%a', '' + editor.translate(daysShort[date.getDay()]));
+      fmt = fmt.replace('%%', '%');
+      return fmt;
+    };
+
+    var createTemplateList = function (editor, callback) {
+      return function () {
+        var templateList = getTemplates(editor);
+        if (isFunction(templateList)) {
+          templateList(callback);
+        } else if (isString(templateList)) {
+          global$2.send({
+            url: templateList,
+            success: function (text) {
+              callback(JSON.parse(text));
+            }
+          });
+        } else {
+          callback(templateList);
+        }
+      };
+    };
+    var replaceTemplateValues = function (html, templateValues) {
+      global$3.each(templateValues, function (v, k) {
+        if (isFunction(v)) {
+          v = v(k);
+        }
+        html = html.replace(new RegExp('\\{\\$' + k + '\\}', 'g'), v);
+      });
+      return html;
+    };
+    var replaceVals = function (editor, scope) {
+      var dom = editor.dom, vl = getTemplateReplaceValues(editor);
+      global$3.each(dom.select('*', scope), function (e) {
+        global$3.each(vl, function (v, k) {
+          if (dom.hasClass(e, k)) {
+            if (isFunction(v)) {
+              v(e);
+            }
+          }
+        });
+      });
+    };
+    var hasClass = function (n, c) {
+      return new RegExp('\\b' + c + '\\b', 'g').test(n.className);
+    };
+    var insertTemplate = function (editor, _ui, html) {
+      var dom = editor.dom;
+      var sel = editor.selection.getContent();
+      html = replaceTemplateValues(html, getTemplateReplaceValues(editor));
+      var el = dom.create('div', null, html);
+      var n = dom.select('.mceTmpl', el);
+      if (n && n.length > 0) {
+        el = dom.create('div', null);
+        el.appendChild(n[0].cloneNode(true));
+      }
+      global$3.each(dom.select('*', el), function (n) {
+        if (hasClass(n, getCreationDateClasses(editor).replace(/\s+/g, '|'))) {
+          n.innerHTML = getDateTime(editor, getCdateFormat(editor));
+        }
+        if (hasClass(n, getModificationDateClasses(editor).replace(/\s+/g, '|'))) {
+          n.innerHTML = getDateTime(editor, getMdateFormat(editor));
+        }
+        if (hasClass(n, getSelectedContentClasses(editor).replace(/\s+/g, '|'))) {
+          n.innerHTML = sel;
+        }
+      });
+      replaceVals(editor, el);
+      editor.execCommand('mceInsertContent', false, el.innerHTML);
+      editor.addVisual();
+    };
+
+    var none = function () {
+      return NONE;
+    };
+    var NONE = function () {
+      var call = function (thunk) {
+        return thunk();
+      };
+      var id = identity;
+      var me = {
+        fold: function (n, _s) {
+          return n();
+        },
+        isSome: never,
+        isNone: always,
+        getOr: id,
+        getOrThunk: call,
+        getOrDie: function (msg) {
+          throw new Error(msg || 'error: getOrDie called on none.');
+        },
+        getOrNull: constant(null),
+        getOrUndefined: constant(undefined),
+        or: id,
+        orThunk: call,
+        map: none,
+        each: noop,
+        bind: none,
+        exists: never,
+        forall: always,
+        filter: function () {
+          return none();
+        },
+        toArray: function () {
+          return [];
+        },
+        toString: constant('none()')
+      };
+      return me;
+    }();
+    var some = function (a) {
+      var constant_a = constant(a);
+      var self = function () {
+        return me;
+      };
+      var bind = function (f) {
+        return f(a);
+      };
+      var me = {
+        fold: function (n, s) {
+          return s(a);
+        },
+        isSome: always,
+        isNone: never,
+        getOr: constant_a,
+        getOrThunk: constant_a,
+        getOrDie: constant_a,
+        getOrNull: constant_a,
+        getOrUndefined: constant_a,
+        or: self,
+        orThunk: self,
+        map: function (f) {
+          return some(f(a));
+        },
+        each: function (f) {
+          f(a);
+        },
+        bind: bind,
+        exists: bind,
+        forall: bind,
+        filter: function (f) {
+          return f(a) ? me : NONE;
+        },
+        toArray: function () {
+          return [a];
+        },
+        toString: function () {
+          return 'some(' + a + ')';
+        }
+      };
+      return me;
+    };
+    var from = function (value) {
+      return value === null || value === undefined ? NONE : some(value);
+    };
+    var Optional = {
+      some: some,
+      none: none,
+      from: from
+    };
+
+    var map = function (xs, f) {
+      var len = xs.length;
+      var r = new Array(len);
+      for (var i = 0; i < len; i++) {
+        var x = xs[i];
+        r[i] = f(x, i);
+      }
+      return r;
+    };
+    var findUntil = function (xs, pred, until) {
+      for (var i = 0, len = xs.length; i < len; i++) {
+        var x = xs[i];
+        if (pred(x, i)) {
+          return Optional.some(x);
+        } else if (until(x, i)) {
+          break;
+        }
+      }
+      return Optional.none();
+    };
+    var find = function (xs, pred) {
+      return findUntil(xs, pred, never);
+    };
+
+    var global$1 = tinymce.util.Tools.resolve('tinymce.Env');
+
+    var global = tinymce.util.Tools.resolve('tinymce.util.Promise');
+
+    var hasOwnProperty = Object.hasOwnProperty;
+    var get = function (obj, key) {
+      return has(obj, key) ? Optional.from(obj[key]) : Optional.none();
+    };
+    var has = function (obj, key) {
+      return hasOwnProperty.call(obj, key);
+    };
+
+    var entitiesAttr = {
+      '"': '&quot;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '&': '&amp;',
+      '\'': '&#039;'
+    };
+    var htmlEscape = function (html) {
+      return html.replace(/["'<>&]/g, function (match) {
+        return get(entitiesAttr, match).getOr(match);
+      });
+    };
+
+    var getPreviewContent = function (editor, html) {
+      if (html.indexOf('<html>') === -1) {
+        var contentCssEntries_1 = '';
+        var contentStyle = getContentStyle(editor);
+        var cors_1 = shouldUseContentCssCors(editor) ? ' crossorigin="anonymous"' : '';
+        global$3.each(editor.contentCSS, function (url) {
+          contentCssEntries_1 += '<link type="text/css" rel="stylesheet" href="' + editor.documentBaseURI.toAbsolute(url) + '"' + cors_1 + '>';
+        });
+        if (contentStyle) {
+          contentCssEntries_1 += '<style type="text/css">' + contentStyle + '</style>';
+        }
+        var bodyClass = getBodyClass(editor);
+        var encode = editor.dom.encode;
+        var isMetaKeyPressed = global$1.mac ? 'e.metaKey' : 'e.ctrlKey && !e.altKey';
+        var preventClicksOnLinksScript = '<script>' + 'document.addEventListener && document.addEventListener("click", function(e) {' + 'for (var elm = e.target; elm; elm = elm.parentNode) {' + 'if (elm.nodeName === "A" && !(' + isMetaKeyPressed + ')) {' + 'e.preventDefault();' + '}' + '}' + '}, false);' + '</script> ';
+        var directionality = editor.getBody().dir;
+        var dirAttr = directionality ? ' dir="' + encode(directionality) + '"' : '';
+        html = '<!DOCTYPE html>' + '<html>' + '<head>' + '<base href="' + encode(editor.documentBaseURI.getURI()) + '">' + contentCssEntries_1 + preventClicksOnLinksScript + '</head>' + '<body class="' + encode(bodyClass) + '"' + dirAttr + '>' + html + '</body>' + '</html>';
+      }
+      return replaceTemplateValues(html, getPreviewReplaceValues(editor));
+    };
+    var open = function (editor, templateList) {
+      var createTemplates = function () {
+        if (!templateList || templateList.length === 0) {
+          var message = editor.translate('No templates defined.');
+          editor.notificationManager.open({
+            text: message,
+            type: 'info'
+          });
+          return Optional.none();
+        }
+        return Optional.from(global$3.map(templateList, function (template, index) {
+          var isUrlTemplate = function (t) {
+            return t.url !== undefined;
+          };
+          return {
+            selected: index === 0,
+            text: template.title,
+            value: {
+              url: isUrlTemplate(template) ? Optional.from(template.url) : Optional.none(),
+              content: !isUrlTemplate(template) ? Optional.from(template.content) : Optional.none(),
+              description: template.description
+            }
+          };
+        }));
+      };
+      var createSelectBoxItems = function (templates) {
+        return map(templates, function (t) {
+          return {
+            text: t.text,
+            value: t.text
+          };
+        });
+      };
+      var findTemplate = function (templates, templateTitle) {
+        return find(templates, function (t) {
+          return t.text === templateTitle;
+        });
+      };
+      var loadFailedAlert = function (api) {
+        editor.windowManager.alert('Could not load the specified template.', function () {
+          return api.focus('template');
+        });
+      };
+      var getTemplateContent = function (t) {
+        return new global(function (resolve, reject) {
+          t.value.url.fold(function () {
+            return resolve(t.value.content.getOr(''));
+          }, function (url) {
+            return global$2.send({
+              url: url,
+              success: function (html) {
+                resolve(html);
+              },
+              error: function (e) {
+                reject(e);
+              }
+            });
+          });
+        });
+      };
+      var onChange = function (templates, updateDialog) {
+        return function (api, change) {
+          if (change.name === 'template') {
+            var newTemplateTitle = api.getData().template;
+            findTemplate(templates, newTemplateTitle).each(function (t) {
+              api.block('Loading...');
+              getTemplateContent(t).then(function (previewHtml) {
+                updateDialog(api, t, previewHtml);
+              }).catch(function () {
+                updateDialog(api, t, '');
+                api.disable('save');
+                loadFailedAlert(api);
+              });
+            });
+          }
+        };
+      };
+      var onSubmit = function (templates) {
+        return function (api) {
+          var data = api.getData();
+          findTemplate(templates, data.template).each(function (t) {
+            getTemplateContent(t).then(function (previewHtml) {
+              editor.execCommand('mceInsertTemplate', false, previewHtml);
+              api.close();
+            }).catch(function () {
+              api.disable('save');
+              loadFailedAlert(api);
+            });
+          });
+        };
+      };
+      var openDialog = function (templates) {
+        var selectBoxItems = createSelectBoxItems(templates);
+        var buildDialogSpec = function (bodyItems, initialData) {
+          return {
+            title: 'Insert Template',
+            size: 'large',
+            body: {
+              type: 'panel',
+              items: bodyItems
+            },
+            initialData: initialData,
+            buttons: [
+              {
+                type: 'cancel',
+                name: 'cancel',
+                text: 'Cancel'
+              },
+              {
+                type: 'submit',
+                name: 'save',
+                text: 'Save',
+                primary: true
+              }
+            ],
+            onSubmit: onSubmit(templates),
+            onChange: onChange(templates, updateDialog)
+          };
+        };
+        var updateDialog = function (dialogApi, template, previewHtml) {
+          var content = getPreviewContent(editor, previewHtml);
+          var bodyItems = [
+            {
+              type: 'selectbox',
+              name: 'template',
+              label: 'Templates',
+              items: selectBoxItems
+            },
+            {
+              type: 'htmlpanel',
+              html: '<p aria-live="polite">' + htmlEscape(template.value.description) + '</p>'
+            },
+            {
+              label: 'Preview',
+              type: 'iframe',
+              name: 'preview',
+              sandboxed: false
+            }
+          ];
+          var initialData = {
+            template: template.text,
+            preview: content
+          };
+          dialogApi.unblock();
+          dialogApi.redial(buildDialogSpec(bodyItems, initialData));
+          dialogApi.focus('template');
+        };
+        var dialogApi = editor.windowManager.open(buildDialogSpec([], {
+          template: '',
+          preview: ''
+        }));
+        dialogApi.block('Loading...');
+        getTemplateContent(templates[0]).then(function (previewHtml) {
+          updateDialog(dialogApi, templates[0], previewHtml);
+        }).catch(function () {
+          updateDialog(dialogApi, templates[0], '');
+          dialogApi.disable('save');
+          loadFailedAlert(dialogApi);
+        });
+      };
+      var optTemplates = createTemplates();
+      optTemplates.each(openDialog);
+    };
+
+    var showDialog = function (editor) {
+      return function (templates) {
+        open(editor, templates);
+      };
+    };
+    var register$1 = function (editor) {
+      editor.addCommand('mceInsertTemplate', curry(insertTemplate, editor));
+      editor.addCommand('mceTemplate', createTemplateList(editor, showDialog(editor)));
+    };
+
+    var setup = function (editor) {
+      editor.on('PreProcess', function (o) {
+        var dom = editor.dom, dateFormat = getMdateFormat(editor);
+        global$3.each(dom.select('div', o.node), function (e) {
+          if (dom.hasClass(e, 'mceTmpl')) {
+            global$3.each(dom.select('*', e), function (e) {
+              if (dom.hasClass(e, getModificationDateClasses(editor).replace(/\s+/g, '|'))) {
+                e.innerHTML = getDateTime(editor, dateFormat);
+              }
+            });
+            replaceVals(editor, e);
+          }
+        });
+      });
+    };
+
+    var register = function (editor) {
+      var onAction = function () {
+        return editor.execCommand('mceTemplate');
+      };
+      editor.ui.registry.addButton('template', {
+        icon: 'template',
+        tooltip: 'Insert template',
+        onAction: onAction
+      });
+      editor.ui.registry.addMenuItem('template', {
+        icon: 'template',
+        text: 'Insert template...',
+        onAction: onAction
+      });
+    };
+
+    function Plugin () {
+      global$4.add('template', function (editor) {
+        register(editor);
+        register$1(editor);
+        setup(editor);
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
+    var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    function Plugin () {
+      global.add('textcolor', function () {
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
     var Cell = function (initial) {
       var value = initial;
       var get = function () {
@@ -82675,6 +82675,110 @@ tinymce.IconManager.add('default', {
       };
     };
 
+    var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
+
+    var fireVisualBlocks = function (editor, state) {
+      editor.fire('VisualBlocks', { state: state });
+    };
+
+    var toggleVisualBlocks = function (editor, pluginUrl, enabledState) {
+      var dom = editor.dom;
+      dom.toggleClass(editor.getBody(), 'mce-visualblocks');
+      enabledState.set(!enabledState.get());
+      fireVisualBlocks(editor, enabledState.get());
+    };
+
+    var register$1 = function (editor, pluginUrl, enabledState) {
+      editor.addCommand('mceVisualBlocks', function () {
+        toggleVisualBlocks(editor, pluginUrl, enabledState);
+      });
+    };
+
+    var isEnabledByDefault = function (editor) {
+      return editor.getParam('visualblocks_default_state', false, 'boolean');
+    };
+
+    var setup = function (editor, pluginUrl, enabledState) {
+      editor.on('PreviewFormats AfterPreviewFormats', function (e) {
+        if (enabledState.get()) {
+          editor.dom.toggleClass(editor.getBody(), 'mce-visualblocks', e.type === 'afterpreviewformats');
+        }
+      });
+      editor.on('init', function () {
+        if (isEnabledByDefault(editor)) {
+          toggleVisualBlocks(editor, pluginUrl, enabledState);
+        }
+      });
+    };
+
+    var toggleActiveState = function (editor, enabledState) {
+      return function (api) {
+        api.setActive(enabledState.get());
+        var editorEventCallback = function (e) {
+          return api.setActive(e.state);
+        };
+        editor.on('VisualBlocks', editorEventCallback);
+        return function () {
+          return editor.off('VisualBlocks', editorEventCallback);
+        };
+      };
+    };
+    var register = function (editor, enabledState) {
+      var onAction = function () {
+        return editor.execCommand('mceVisualBlocks');
+      };
+      editor.ui.registry.addToggleButton('visualblocks', {
+        icon: 'visualblocks',
+        tooltip: 'Show blocks',
+        onAction: onAction,
+        onSetup: toggleActiveState(editor, enabledState)
+      });
+      editor.ui.registry.addToggleMenuItem('visualblocks', {
+        text: 'Show blocks',
+        icon: 'visualblocks',
+        onAction: onAction,
+        onSetup: toggleActiveState(editor, enabledState)
+      });
+    };
+
+    function Plugin () {
+      global.add('visualblocks', function (editor, pluginUrl) {
+        var enabledState = Cell(false);
+        register$1(editor, pluginUrl, enabledState);
+        register(editor, enabledState);
+        setup(editor, pluginUrl, enabledState);
+      });
+    }
+
+    Plugin();
+
+}());
+
+/**
+ * Copyright (c) Tiny Technologies, Inc. All rights reserved.
+ * Licensed under the LGPL or a commercial license.
+ * For LGPL see License.txt in the project root for license information.
+ * For commercial licenses see https://www.tiny.cloud/
+ *
+ * Version: 5.10.2 (2021-11-17)
+ */
+(function () {
+    'use strict';
+
+    var Cell = function (initial) {
+      var value = initial;
+      var get = function () {
+        return value;
+      };
+      var set = function (v) {
+        value = v;
+      };
+      return {
+        get: get,
+        set: set
+      };
+    };
+
     var global$1 = tinymce.util.Tools.resolve('tinymce.PluginManager');
 
     var get$2 = function (toggleState) {
@@ -83170,110 +83274,6 @@ tinymce.IconManager.add('default', {
         setup(editor, toggleState);
         setup$1(editor, toggleState);
         return get$2(toggleState);
-      });
-    }
-
-    Plugin();
-
-}());
-
-/**
- * Copyright (c) Tiny Technologies, Inc. All rights reserved.
- * Licensed under the LGPL or a commercial license.
- * For LGPL see License.txt in the project root for license information.
- * For commercial licenses see https://www.tiny.cloud/
- *
- * Version: 5.10.2 (2021-11-17)
- */
-(function () {
-    'use strict';
-
-    var Cell = function (initial) {
-      var value = initial;
-      var get = function () {
-        return value;
-      };
-      var set = function (v) {
-        value = v;
-      };
-      return {
-        get: get,
-        set: set
-      };
-    };
-
-    var global = tinymce.util.Tools.resolve('tinymce.PluginManager');
-
-    var fireVisualBlocks = function (editor, state) {
-      editor.fire('VisualBlocks', { state: state });
-    };
-
-    var toggleVisualBlocks = function (editor, pluginUrl, enabledState) {
-      var dom = editor.dom;
-      dom.toggleClass(editor.getBody(), 'mce-visualblocks');
-      enabledState.set(!enabledState.get());
-      fireVisualBlocks(editor, enabledState.get());
-    };
-
-    var register$1 = function (editor, pluginUrl, enabledState) {
-      editor.addCommand('mceVisualBlocks', function () {
-        toggleVisualBlocks(editor, pluginUrl, enabledState);
-      });
-    };
-
-    var isEnabledByDefault = function (editor) {
-      return editor.getParam('visualblocks_default_state', false, 'boolean');
-    };
-
-    var setup = function (editor, pluginUrl, enabledState) {
-      editor.on('PreviewFormats AfterPreviewFormats', function (e) {
-        if (enabledState.get()) {
-          editor.dom.toggleClass(editor.getBody(), 'mce-visualblocks', e.type === 'afterpreviewformats');
-        }
-      });
-      editor.on('init', function () {
-        if (isEnabledByDefault(editor)) {
-          toggleVisualBlocks(editor, pluginUrl, enabledState);
-        }
-      });
-    };
-
-    var toggleActiveState = function (editor, enabledState) {
-      return function (api) {
-        api.setActive(enabledState.get());
-        var editorEventCallback = function (e) {
-          return api.setActive(e.state);
-        };
-        editor.on('VisualBlocks', editorEventCallback);
-        return function () {
-          return editor.off('VisualBlocks', editorEventCallback);
-        };
-      };
-    };
-    var register = function (editor, enabledState) {
-      var onAction = function () {
-        return editor.execCommand('mceVisualBlocks');
-      };
-      editor.ui.registry.addToggleButton('visualblocks', {
-        icon: 'visualblocks',
-        tooltip: 'Show blocks',
-        onAction: onAction,
-        onSetup: toggleActiveState(editor, enabledState)
-      });
-      editor.ui.registry.addToggleMenuItem('visualblocks', {
-        text: 'Show blocks',
-        icon: 'visualblocks',
-        onAction: onAction,
-        onSetup: toggleActiveState(editor, enabledState)
-      });
-    };
-
-    function Plugin () {
-      global.add('visualblocks', function (editor, pluginUrl) {
-        var enabledState = Cell(false);
-        register$1(editor, pluginUrl, enabledState);
-        register(editor, enabledState);
-        setup(editor, pluginUrl, enabledState);
       });
     }
 

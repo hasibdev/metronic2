@@ -49140,14 +49140,39 @@ body {
 .dash-embeded .nav.nav-tabs {
   justify-content: space-between;
   text-align: center;
+  height: 100%;
 }
 .dash-embeded .nav.nav-tabs .nav-link {
   background-color: #E4E6EF;
   color: #3F4254;
-  padding: 25px 15px;
+  padding: 23px 10px;
+  text-align: center;
+}
+@media (min-width: 1200px) and (max-width: 1400px) {
+  .dash-embeded .nav.nav-tabs .nav-link {
+    padding: 23px 3px;
+    font-size: 10px !important;
+  }
+}
+@media (max-width: 768px) {
+  .dash-embeded .nav.nav-tabs .nav-link {
+    padding: 23px 20px;
+  }
+}
+@media (max-width: 550px) {
+  .dash-embeded .nav.nav-tabs .nav-link {
+    padding: 15px 10px;
+  }
 }
 .dash-embeded .nav.nav-tabs .nav-link.active {
   border: 0;
   color: white;
   background-color: #5E6278;
+}
+
+@media (max-width: 768px) {
+  .mobile-px-0 {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
 }
